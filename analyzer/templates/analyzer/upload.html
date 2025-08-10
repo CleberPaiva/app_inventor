@@ -1,0 +1,123 @@
+{% extends 'analyzer/base.html' %}
+
+{% block title %}Upload - Analisador de Apps .aia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-cloud-upload"></i> Upload de Arquivo .aia
+    </h1>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Enviar Arquivo do MIT App Inventor</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+                        {{ form.name }}
+                        {% if form.name.help_text %}
+                            <div class="form-text">{{ form.name.help_text }}</div>
+                        {% endif %}
+                        {% if form.name.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.name.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.file.id_for_label }}" class="form-label">{{ form.file.label }}</label>
+                        {{ form.file }}
+                        <div class="form-text">
+                            Selecione um arquivo .aia do MIT App Inventor (máximo 50MB)
+                        </div>
+                        {% if form.file.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.file.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Voltar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-cloud-upload"></i> Enviar Arquivo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Info Card -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i> Sobre os Arquivos .aia
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="card-text">
+                    Os arquivos .aia são projetos do MIT App Inventor que contêm toda a estrutura 
+                    de um aplicativo móvel, incluindo:
+                </p>
+                <ul>
+                    <li><strong>Imagens e ícones:</strong> Assets visuais do aplicativo</li>
+                    <li><strong>Layouts de tela:</strong> Estrutura das interfaces</li>
+                    <li><strong>Blocos de código:</strong> Lógica do aplicativo</li>
+                    <li><strong>Configurações:</strong> Propriedades do projeto</li>
+                </ul>
+                <p class="card-text">
+                    Nossa análise focará especialmente na <strong>qualidade das imagens e ícones</strong> 
+                    para avaliar a usabilidade do aplicativo.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// File upload preview
+document.getElementById('{{ form.file.id_for_label }}').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        // Auto-fill name if empty
+        const nameField = document.getElementById('{{ form.name.id_for_label }}');
+        if (!nameField.value) {
+            let fileName = file.name.replace('.aia', '').replace(/[_-]/g, ' ');
+            fileName = fileName.charAt(0).toUpperCase() + fileName.slice(1);
+            nameField.value = fileName;
+        }
+        
+        // Show file info
+        const fileInfo = document.createElement('div');
+        fileInfo.className = 'alert alert-info mt-2';
+        fileInfo.innerHTML = `
+            <strong>Arquivo selecionado:</strong> ${file.name}<br>
+            <strong>Tamanho:</strong> ${(file.size / (1024*1024)).toFixed(2)} MB
+        `;
+        
+        // Remove existing file info
+        const existingInfo = document.querySelector('.file-info');
+        if (existingInfo) {
+            existingInfo.remove();
+        }
+        
+        fileInfo.classList.add('file-info');
+        e.target.parentNode.appendChild(fileInfo);
+    }
+});
+</script>
+{% endblock %}

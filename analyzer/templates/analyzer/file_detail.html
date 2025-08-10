@@ -1,0 +1,237 @@
+{% extends 'analyzer/base.html' %}
+
+{% block title %}{{ aia_file.name }} - Analisador de Apps .aia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-file-earmark-zip"></i> {{ aia_file.name }}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        {% if not aia_file.is_analyzed %}
+            <form method="post" action="{% url 'analyze_file' aia_file.pk %}" class="me-2">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-play-circle"></i> Analisar Arquivo
+                </button>
+            </form>
+        {% else %}
+            <a href="{% url 'analysis_results' aia_file.pk %}" class="btn btn-success me-2">
+                <i class="bi bi-graph-up"></i> Ver Resultados
+            </a>
+        {% endif %}
+        <a href="{% url 'file_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<!-- File Info -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i> Informações do Arquivo
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><strong>Nome:</strong></td>
+                                <td>{{ aia_file.name }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Tamanho:</strong></td>
+                                <td>{{ aia_file.file_size_mb }} MB</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Enviado em:</strong></td>
+                                <td>{{ aia_file.uploaded_at|date:"d/m/Y H:i" }}</td>
+                            </tr>
+                            {% if aia_file.uploaded_by %}
+                            <tr>
+                                <td><strong>Enviado por:</strong></td>
+                                <td>{{ aia_file.uploaded_by.username }}</td>
+                            </tr>
+                            {% endif %}
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><strong>Status:</strong></td>
+                                <td>
+                                    {% if aia_file.is_analyzed %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle"></i> Analisado
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-warning">
+                                            <i class="bi bi-hourglass"></i> Aguardando análise
+                                        </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% if aia_file.is_analyzed %}
+                            <tr>
+                                <td><strong>Total de Imagens:</strong></td>
+                                <td>{{ aia_file.total_images }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Total de Ícones:</strong></td>
+                                <td>{{ aia_file.total_icons }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Analisado em:</strong></td>
+                                <td>{{ aia_file.analysis_completed_at|date:"d/m/Y H:i" }}</td>
+                            </tr>
+                            {% endif %}
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if aia_file.is_analyzed %}
+    <!-- Quick Analysis Summary -->
+    {% if evaluation %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-speedometer2"></i> Resumo da Análise
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="text-center">
+                                <h3 class="text-primary">{{ evaluation.overall_usability_score|floatformat:0 }}%</h3>
+                                <p class="text-muted">Score Geral de Usabilidade</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center">
+                                <h3 class="text-info">{{ evaluation.image_quality_score|floatformat:0 }}%</h3>
+                                <p class="text-muted">Qualidade das Imagens</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center">
+                                <h3 class="text-success">{{ evaluation.icon_quality_score|floatformat:0 }}%</h3>
+                                <p class="text-muted">Qualidade dos Ícones</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if evaluation.total_issues > 0 %}
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>{{ evaluation.total_issues }} problema(s) detectado(s).</strong>
+                        <a href="{% url 'analysis_results' aia_file.pk %}" class="alert-link">
+                            Ver detalhes completos
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success mt-3">
+                        <i class="bi bi-check-circle"></i>
+                        <strong>Parabéns!</strong> Nenhum problema significativo detectado.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Images Overview -->
+    {% if images %}
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-images"></i> Imagens Extraídas ({{ images.count }})
+                    </h5>
+                    <a href="{% url 'analysis_results' aia_file.pk %}" class="btn btn-sm btn-outline-primary">
+                        Ver Análise Detalhada
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if images.count > 0 %}
+                        <div class="row">
+                            {% for image in images|slice:":12" %}
+                                <div class="col-md-3 col-sm-4 col-6 mb-3">
+                                    <div class="card">
+                                        <img src="{{ image.extracted_file.url }}" 
+                                             class="card-img-top image-thumbnail" 
+                                             alt="{{ image.name }}"
+                                             style="height: 100px; object-fit: cover;">
+                                        <div class="card-body p-2">
+                                            <h6 class="card-title small mb-1">{{ image.name|truncatechars:15 }}</h6>
+                                            <p class="card-text">
+                                                <small class="text-muted">
+                                                    {{ image.width }}x{{ image.height }}
+                                                </small>
+                                                {% if image.quality_rating %}
+                                                    <br>
+                                                    <span class="badge quality-{{ image.quality_rating }} quality-badge">
+                                                        {{ image.get_quality_rating_display }}
+                                                    </span>
+                                                {% endif %}
+                                            </p>
+                                            <a href="{% url 'image_detail' image.pk %}" class="btn btn-sm btn-outline-primary">
+                                                Detalhes
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        
+                        {% if images.count > 12 %}
+                            <div class="text-center mt-3">
+                                <a href="{% url 'analysis_results' aia_file.pk %}" class="btn btn-primary">
+                                    Ver Todas as {{ images.count }} Imagens
+                                </a>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-muted">Nenhuma imagem encontrada neste arquivo .aia</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+{% else %}
+    <!-- Not Analyzed Yet -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i class="bi bi-hourglass-split text-warning" style="font-size: 3rem;"></i>
+                    <h4 class="mt-3">Arquivo não analisado</h4>
+                    <p class="text-muted">
+                        Clique no botão "Analisar Arquivo" para extrair e analisar as imagens 
+                        deste projeto do MIT App Inventor.
+                    </p>
+                    <form method="post" action="{% url 'analyze_file' aia_file.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-play-circle"></i> Iniciar Análise
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
