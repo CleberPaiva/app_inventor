@@ -3,93 +3,132 @@
 {% block title %}Upload - Analisador de Apps .aia{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">
-        <i class="bi bi-cloud-upload"></i> Upload de Arquivo .aia
+<div style="margin-bottom: 32px;">
+    <h1 class="md-headline-large">
+        <span class="material-icons" style="margin-right: 16px; vertical-align: middle;">cloud_upload</span>
+        Upload de Arquivo .aia
     </h1>
+    <p class="md-body-large" style="color: var(--md-sys-color-on-surface-variant);">
+        Envie um arquivo do MIT App Inventor para análise de usabilidade
+    </p>
 </div>
 
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Enviar Arquivo do MIT App Inventor</h5>
+<div class="grid grid-cols-1" style="max-width: 800px; margin: 0 auto;">
+    <div class="md-card md-card-elevated">
+        <div style="margin-bottom: 24px;">
+            <h2 class="md-title-large">Enviar Arquivo do MIT App Inventor</h2>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <!-- Name Field -->
+            <div style="margin-bottom: 24px;">
+                <label for="{{ form.name.id_for_label }}" class="md-label-large" style="display: block; margin-bottom: 8px; color: var(--md-sys-color-on-surface);">
+                    {{ form.name.label }}
+                </label>
+                <input type="text" 
+                       id="{{ form.name.id_for_label }}" 
+                       name="{{ form.name.name }}"
+                       value="{{ form.name.value|default:'' }}"
+                       placeholder="Nome do projeto (será preenchido automaticamente se deixado em branco)"
+                       style="width: 100%; padding: 16px; border: 1px solid var(--md-sys-color-on-surface-variant); border-radius: 8px; font-family: 'Roboto', sans-serif; font-size: 16px; background-color: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface);">
+                {% if form.name.errors %}
+                    <div style="color: var(--md-sys-color-error); font-size: 14px; margin-top: 4px;">
+                        {% for error in form.name.errors %}
+                            <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">error</span>
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
             </div>
-            <div class="card-body">
-                <form method="post" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    
-                    <div class="mb-3">
-                        <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
-                        {{ form.name }}
-                        {% if form.name.help_text %}
-                            <div class="form-text">{{ form.name.help_text }}</div>
-                        {% endif %}
-                        {% if form.name.errors %}
-                            <div class="invalid-feedback d-block">
-                                {% for error in form.name.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
+            
+            <!-- File Field -->
+            <div style="margin-bottom: 24px;">
+                <label for="{{ form.file.id_for_label }}" class="md-label-large" style="display: block; margin-bottom: 8px; color: var(--md-sys-color-on-surface);">
+                    {{ form.file.label }}
+                </label>
+                <div style="border: 2px dashed var(--md-sys-color-on-surface-variant); border-radius: 12px; padding: 24px; text-align: center; background-color: var(--md-sys-color-surface-variant); opacity: 0.6;">
+                    <span class="material-icons" style="font-size: 48px; color: var(--md-sys-color-primary); margin-bottom: 16px;">
+                        upload_file
+                    </span>
+                    <input type="file" 
+                           id="{{ form.file.id_for_label }}" 
+                           name="{{ form.file.name }}"
+                           accept=".aia"
+                           style="width: 100%; margin-bottom: 8px; font-family: 'Roboto', sans-serif;">
+                    <p class="md-body-medium" style="color: var(--md-sys-color-on-surface-variant); margin: 0;">
+                        Selecione um arquivo .aia do MIT App Inventor (máximo 50MB)
+                    </p>
+                </div>
+                {% if form.file.errors %}
+                    <div style="color: var(--md-sys-color-error); font-size: 14px; margin-top: 8px;">
+                        {% for error in form.file.errors %}
+                            <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">error</span>
+                            {{ error }}
+                        {% endfor %}
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="{{ form.file.id_for_label }}" class="form-label">{{ form.file.label }}</label>
-                        {{ form.file }}
-                        <div class="form-text">
-                            Selecione um arquivo .aia do MIT App Inventor (máximo 50MB)
-                        </div>
-                        {% if form.file.errors %}
-                            <div class="invalid-feedback d-block">
-                                {% for error in form.file.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
-                            <i class="bi bi-arrow-left"></i> Voltar
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-cloud-upload"></i> Enviar Arquivo
-                        </button>
-                    </div>
-                </form>
+                {% endif %}
+            </div>
+            
+            <!-- Action Buttons -->
+            <div style="display: flex; gap: 16px; justify-content: flex-end; flex-wrap: wrap;">
+                <a href="{% url 'dashboard' %}" class="md-button md-button-outlined">
+                    <span class="material-icons" style="margin-right: 8px;">arrow_back</span>
+                    Voltar
+                </a>
+                <button type="submit" class="md-button md-button-filled">
+                    <span class="material-icons" style="margin-right: 8px;">cloud_upload</span>
+                    Enviar Arquivo
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Info Card -->
+    <div class="md-card" style="margin-top: 24px;">
+        <div style="display: flex; align-items: center; margin-bottom: 16px;">
+            <span class="material-icons" style="margin-right: 12px; color: var(--md-sys-color-primary);">
+                info
+            </span>
+            <h3 class="md-title-medium">Sobre os Arquivos .aia</h3>
+        </div>
+        
+        <p class="md-body-medium" style="margin-bottom: 16px;">
+            Os arquivos .aia são projetos do MIT App Inventor que contêm toda a estrutura 
+            de um aplicativo móvel, incluindo:
+        </p>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center;">
+                <span class="material-icons" style="margin-right: 8px; color: var(--md-sys-color-primary);">image</span>
+                <span class="md-body-medium"><strong>Imagens e ícones:</strong> Assets visuais do aplicativo</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <span class="material-icons" style="margin-right: 8px; color: var(--md-sys-color-primary);">dashboard</span>
+                <span class="md-body-medium"><strong>Layouts de tela:</strong> Estrutura das interfaces</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <span class="material-icons" style="margin-right: 8px; color: var(--md-sys-color-primary);">code</span>
+                <span class="md-body-medium"><strong>Blocos de código:</strong> Lógica do aplicativo</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <span class="material-icons" style="margin-right: 8px; color: var(--md-sys-color-primary);">settings</span>
+                <span class="md-body-medium"><strong>Configurações:</strong> Propriedades do projeto</span>
             </div>
         </div>
         
-        <!-- Info Card -->
-        <div class="card mt-4">
-            <div class="card-header">
-                <h6 class="card-title mb-0">
-                    <i class="bi bi-info-circle"></i> Sobre os Arquivos .aia
-                </h6>
-            </div>
-            <div class="card-body">
-                <p class="card-text">
-                    Os arquivos .aia são projetos do MIT App Inventor que contêm toda a estrutura 
-                    de um aplicativo móvel, incluindo:
-                </p>
-                <ul>
-                    <li><strong>Imagens e ícones:</strong> Assets visuais do aplicativo</li>
-                    <li><strong>Layouts de tela:</strong> Estrutura das interfaces</li>
-                    <li><strong>Blocos de código:</strong> Lógica do aplicativo</li>
-                    <li><strong>Configurações:</strong> Propriedades do projeto</li>
-                </ul>
-                <p class="card-text">
-                    Nossa análise focará especialmente na <strong>qualidade das imagens e ícones</strong> 
-                    para avaliar a usabilidade do aplicativo.
-                </p>
-            </div>
+        <div class="alert alert-info">
+            <span class="material-icons" style="margin-right: 8px; vertical-align: middle;">analytics</span>
+            Nossa análise focará especialmente na <strong>qualidade das imagens e ícones</strong> 
+            para avaliar a usabilidade do aplicativo seguindo as diretrizes do Material Design.
         </div>
     </div>
 </div>
 
+{% block extra_js %}
 <script>
-// File upload preview
+// File upload preview and validation
 document.getElementById('{{ form.file.id_for_label }}').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
@@ -103,8 +142,10 @@ document.getElementById('{{ form.file.id_for_label }}').addEventListener('change
         
         // Show file info
         const fileInfo = document.createElement('div');
-        fileInfo.className = 'alert alert-info mt-2';
+        fileInfo.className = 'alert alert-info';
+        fileInfo.style.marginTop = '16px';
         fileInfo.innerHTML = `
+            <span class="material-icons" style="margin-right: 8px; vertical-align: middle;">description</span>
             <strong>Arquivo selecionado:</strong> ${file.name}<br>
             <strong>Tamanho:</strong> ${(file.size / (1024*1024)).toFixed(2)} MB
         `;
@@ -116,8 +157,41 @@ document.getElementById('{{ form.file.id_for_label }}').addEventListener('change
         }
         
         fileInfo.classList.add('file-info');
-        e.target.parentNode.appendChild(fileInfo);
+        e.target.closest('div').appendChild(fileInfo);
+        
+        // Update upload area appearance
+        const uploadArea = e.target.closest('div');
+        uploadArea.style.borderColor = 'var(--md-sys-color-primary)';
+        uploadArea.style.backgroundColor = 'var(--md-sys-color-primary-container)';
     }
 });
+
+// Drag and drop functionality
+const uploadArea = document.querySelector('input[type="file"]').closest('div');
+
+uploadArea.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    this.style.borderColor = 'var(--md-sys-color-primary)';
+    this.style.backgroundColor = 'var(--md-sys-color-primary-container)';
+});
+
+uploadArea.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    this.style.borderColor = 'var(--md-sys-color-on-surface-variant)';
+    this.style.backgroundColor = 'var(--md-sys-color-surface-variant)';
+});
+
+uploadArea.addEventListener('drop', function(e) {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        document.getElementById('{{ form.file.id_for_label }}').files = files;
+        // Trigger change event
+        document.getElementById('{{ form.file.id_for_label }}').dispatchEvent(new Event('change'));
+    }
+    this.style.borderColor = 'var(--md-sys-color-on-surface-variant)';
+    this.style.backgroundColor = 'var(--md-sys-color-surface-variant)';
+});
 </script>
+{% endblock %}
 {% endblock %}
