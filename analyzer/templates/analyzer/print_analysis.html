@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório de Análise - {{ aia_file.name }}</title>
+    <style>
+        /* Reset e configurações básicas */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Configurações para impressão A4 */
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            font-size: 12pt;
+            margin: 0 30px;
+            padding: 0;
+        }
+
+        /* Cabeçalho do relatório */
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #1976d2;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #1976d2;
+            font-size: 24pt;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            color: #666;
+            font-size: 14pt;
+        }
+
+        /* Informações do arquivo */
+        .file-info {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+        }
+
+        .file-info h2 {
+            color: #1976d2;
+            font-size: 16pt;
+            margin-bottom: 10px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #555;
+        }
+
+        /* Scores principais */
+        .scores-section {
+            margin-bottom: 25px;
+        }
+
+        .scores-section h2 {
+            color: #1976d2;
+            font-size: 16pt;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .score-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .score-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .score-value {
+            font-size: 28pt;
+            font-weight: bold;
+            color: #1976d2;
+            margin-bottom: 5px;
+        }
+
+        .score-label {
+            color: #666;
+            font-size: 11pt;
+        }
+
+        /* Distribuição por qualidade */
+        .quality-section {
+            margin-bottom: 25px;
+        }
+
+        .quality-section h3 {
+            color: #1976d2;
+            font-size: 14pt;
+            margin-bottom: 10px;
+        }
+
+        .quality-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .quality-item {
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .quality-high {
+            background-color: #e8f5e8;
+            border: 1px solid #4caf50;
+        }
+
+        .quality-medium {
+            background-color: #fff3e0;
+            border: 1px solid #ff9800;
+        }
+
+        .quality-low {
+            background-color: #ffebee;
+            border: 1px solid #f44336;
+        }
+
+        /* Recomendações */
+        .recommendations {
+            margin-bottom: 25px;
+        }
+
+        .recommendations h3 {
+            color: #1976d2;
+            font-size: 14pt;
+            margin-bottom: 10px;
+        }
+
+        .recommendation-item {
+            background-color: #f8f9fa;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 4px solid #1976d2;
+            border-radius: 4px;
+        }
+
+        .recommendation-item::before {
+            content: "• ";
+            color: #1976d2;
+            font-weight: bold;
+        }
+
+        /* Rodapé */
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            border-top: 1px solid #ddd;
+            padding-top: 15px;
+            color: #666;
+            font-size: 10pt;
+        }
+
+        /* Quebras de página */
+        .page-break {
+            page-break-before: always;
+        }
+
+        /* Estilos para impressão */
+        @media print {
+            body {
+                color: black !important;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            /* Garantir que elementos não sejam cortados */
+            .file-info,
+            .score-card,
+            .quality-item,
+            .recommendation-item {
+                break-inside: avoid;
+            }
+        }
+
+        /* Botão de impressão (só aparece na tela) */
+        .print-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 1000;
+        }
+
+        .print-button:hover {
+            background-color: #1565c0;
+        }
+
+        @media print {
+            .print-button {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="print-button no-print" onclick="window.print()">
+        🖨️ Imprimir
+    </button>
+
+    <!-- Cabeçalho do Relatório -->
+    <div class="header">
+        <h1>Relatório de Análise de Usabilidade</h1>
+        <div class="subtitle">MIT App Inventor - Análise de Qualidade de Interface</div>
+    </div>
+
+    <!-- Informações do Arquivo -->
+    <div class="file-info">
+        <h2>Informações do Projeto</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">Nome do Arquivo:</span>
+                <span>{{ aia_file.name }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Tamanho:</span>
+                <span>{{ aia_file.file_size_mb }} MB</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Data de Upload:</span>
+                <span>{{ aia_file.uploaded_at|date:"d/m/Y H:i" }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Data da Análise:</span>
+                <span>{{ evaluation.evaluated_at|date:"d/m/Y H:i" }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Total de Imagens:</span>
+                <span>{{ total_images }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Total de Ícones:</span>
+                <span>{{ total_icons }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scores Principais -->
+    <div class="scores-section">
+        <h2>Scores de Usabilidade</h2>
+        <div class="score-grid">
+            <div class="score-card">
+                <div class="score-value">{{ evaluation.overall_usability_score|floatformat:1 }}%</div>
+                <div class="score-label">Score Geral de Usabilidade</div>
+            </div>
+            <div class="score-card">
+                <div class="score-value">{{ evaluation.image_quality_score|floatformat:1 }}%</div>
+                <div class="score-label">Qualidade das Imagens</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Distribuição por Qualidade -->
+    <div class="quality-section">
+        <h3>Distribuição por Qualidade</h3>
+        <div class="quality-grid">
+            <div class="quality-item quality-high">
+                <div style="font-size: 18pt; font-weight: bold;">{{ high_quality_count }}</div>
+                <div>Alta Qualidade</div>
+            </div>
+            <div class="quality-item quality-medium">
+                <div style="font-size: 18pt; font-weight: bold;">{{ medium_quality_count }}</div>
+                <div>Qualidade Média</div>
+            </div>
+            <div class="quality-item quality-low">
+                <div style="font-size: 18pt; font-weight: bold;">{{ low_quality_count }}</div>
+                <div>Baixa Qualidade</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recomendações -->
+    {% if recommendations %}
+    <div class="recommendations">
+        <h3>Recomendações para Melhoria</h3>
+        {% for recommendation in recommendations %}
+            <div class="recommendation-item">
+                {{ recommendation }}
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Detalhes Técnicos -->
+    <div class="page-break">
+        <h2 style="color: #1976d2; font-size: 16pt; margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+            Detalhes Técnicos da Análise
+        </h2>
+        
+        <div style="margin-bottom: 20px;">
+            <h3 style="color: #1976d2; font-size: 14pt; margin-bottom: 10px;">Critérios de Avaliação</h3>
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px;">
+                <p><strong>Resolução (40%):</strong> Análise da qualidade e adequação da resolução das imagens</p>
+                <p><strong>Otimização (30%):</strong> Eficiência no uso de espaço e compressão</p>
+                <p><strong>Proporção (20%):</strong> Adequação das proporções para diferentes dispositivos</p>
+                <p><strong>Material Design (10%):</strong> Conformidade com diretrizes do Material Design</p>
+            </div>
+        </div>
+
+        {% if evaluation.total_issues > 0 %}
+        <div style="background-color: #fff3e0; border: 1px solid #ff9800; padding: 15px; border-radius: 6px;">
+            <h3 style="color: #f57c00; margin-bottom: 10px;">⚠️ Problemas Detectados</h3>
+            <p><strong>{{ evaluation.total_issues }}</strong> problema(s) foram identificados na análise que podem impactar a usabilidade do aplicativo.</p>
+        </div>
+        {% else %}
+        <div style="background-color: #e8f5e8; border: 1px solid #4caf50; padding: 15px; border-radius: 6px;">
+            <h3 style="color: #2e7d32; margin-bottom: 10px;">✅ Análise Positiva</h3>
+            <p>Nenhum problema crítico foi detectado na análise. O projeto apresenta boa qualidade de usabilidade.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Rodapé -->
+    <div class="footer">
+        <p>Relatório gerado automaticamente pelo Sistema de Análise de Apps .aia</p>
+        <p>{{ "now"|date:"d/m/Y H:i" }} - Versão do Sistema: 1.0</p>
+    </div>
+</body>
+</html>

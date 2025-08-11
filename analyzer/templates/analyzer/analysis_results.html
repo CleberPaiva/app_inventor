@@ -1,0 +1,366 @@
+{% extends 'analyzer/base.html' %}
+
+{% block title %}Resultados da Análise - {{ aia_file.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-graph-up"></i> Resultados da Análise
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{% url 'print_analysis' aia_file.pk %}" class="btn btn-outline-info me-2" target="_blank">
+            <i class="bi bi-printer"></i> Imprimir Relatório
+        </a>
+        <form method="post" action="{% url 'analyze_file' aia_file.pk %}" class="me-2" style="display: inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary" 
+                    onclick="return confirm('Deseja reanalizar este arquivo? Isso atualizará todos os scores com o sistema de pontuação granular.')">
+                <i class="bi bi-arrow-clockwise"></i> Reanalizar
+            </button>
+        </form>
+        <a href="{% url 'file_detail' aia_file.pk %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar ao Arquivo
+        </a>
+    </div>
+</div>
+
+<!-- Overall Scores -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-speedometer2 text-primary" style="font-size: 2rem;"></i>
+                <h3 class="text-primary mt-2">{{ evaluation.overall_usability_score|floatformat:1 }}%</h3>
+                <h5 class="card-title">Score Geral de Usabilidade</h5>
+                <p class="text-muted">Avaliação geral baseada na qualidade das imagens e ícones</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-images text-info" style="font-size: 2rem;"></i>
+                <h3 class="text-info mt-2">{{ evaluation.image_quality_score|floatformat:1 }}%</h3>
+                <h5 class="card-title">Qualidade das Imagens</h5>
+                <p class="text-muted">{{ evaluation.high_quality_images_count }} de {{ images.count }} imagens com alta qualidade</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-star text-warning" style="font-size: 2rem;"></i>
+                <h3 class="text-warning mt-2">{{ evaluation.icon_quality_score|floatformat:1 }}%</h3>
+                <h5 class="card-title">Qualidade dos Ícones</h5>
+                <p class="text-muted">{{ icons.count }} ícone(s) detectado(s)</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Issues Summary -->
+{% if evaluation.total_issues > 0 %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="alert alert-warning">
+            <h5><i class="bi bi-exclamation-triangle"></i> Problemas Detectados</h5>
+            <div class="row">
+                {% if evaluation.low_quality_images_count > 0 %}
+                <div class="col-md-3">
+                    <strong>{{ evaluation.low_quality_images_count }}</strong> imagem(ns) com baixa qualidade
+                </div>
+                {% endif %}
+                {% if evaluation.oversized_images_count > 0 %}
+                <div class="col-md-3">
+                    <strong>{{ evaluation.oversized_images_count }}</strong> imagem(ns) muito grande(s)
+                </div>
+                {% endif %}
+                {% if evaluation.undersized_images_count > 0 %}
+                <div class="col-md-3">
+                    <strong>{{ evaluation.undersized_images_count }}</strong> imagem(ns) muito pequena(s)
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recommendations -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-lightbulb"></i> Recomendações
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if evaluation.recommendations %}
+                    <div class="recommendations">
+                        {{ evaluation.recommendations|linebreaks }}
+                    </div>
+                {% else %}
+                    <p class="text-success">
+                        <i class="bi bi-check-circle"></i>
+                        Parabéns! Nenhum problema significativo detectado.
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Images by Quality -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-bar-chart"></i> Distribuição por Qualidade
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% if high_quality_images %}
+                    <div class="col-md-6 mb-3">
+                        <h6 class="text-success">
+                            <i class="bi bi-check-circle"></i> 
+                            Alta Qualidade ({{ high_quality_images.count }})
+                        </h6>
+                        <div class="row">
+                            {% for image in high_quality_images|slice:":6" %}
+                                <div class="col-4 col-md-2 mb-2">
+                                    <img src="{{ image.extracted_file.url }}" 
+                                         class="img-thumbnail" 
+                                         style="height: 60px; object-fit: cover;"
+                                         title="{{ image.name }}">
+                                    <div class="text-center mt-1">
+                                        <span class="badge bg-success quality-badge">
+                                            {{ image.get_quality_rating_display }}
+                                        </span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if medium_quality_images %}
+                    <div class="col-md-6 mb-3">
+                        <h6 class="text-warning">
+                            <i class="bi bi-exclamation-circle"></i> 
+                            Qualidade Média ({{ medium_quality_images.count }})
+                        </h6>
+                        <div class="row">
+                            {% for image in medium_quality_images|slice:":6" %}
+                                <div class="col-4 col-md-2 mb-2">
+                                    <img src="{{ image.extracted_file.url }}" 
+                                         class="img-thumbnail" 
+                                         style="height: 60px; object-fit: cover;"
+                                         title="{{ image.name }}">
+                                    <div class="text-center mt-1">
+                                        <span class="badge bg-warning quality-badge">
+                                            {{ image.get_quality_rating_display }}
+                                        </span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if low_quality_images %}
+                <div class="row">
+                    <div class="col-md-12">
+                        <h6 class="text-danger">
+                            <i class="bi bi-x-circle"></i> 
+                            Baixa Qualidade - Requer Atenção ({{ low_quality_images.count }})
+                        </h6>
+                        <div class="row">
+                            {% for image in low_quality_images|slice:":12" %}
+                                <div class="col-3 col-md-1 mb-2">
+                                    <img src="{{ image.extracted_file.url }}" 
+                                         class="img-thumbnail" 
+                                         style="height: 60px; object-fit: cover;"
+                                         title="{{ image.name }}">
+                                    <div class="text-center mt-1">
+                                        <span class="badge bg-danger quality-badge">
+                                            {{ image.get_quality_rating_display }}
+                                        </span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Images by Type -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-grid"></i> Categorias de Assets
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% if icons %}
+                    <div class="col-md-3 mb-3">
+                        <h6><i class="bi bi-star"></i> Ícones ({{ icons.count }})</h6>
+                        <div class="d-flex flex-wrap">
+                            {% for icon in icons|slice:":8" %}
+                                <div class="me-2 mb-2">
+                                    <img src="{{ icon.extracted_file.url }}" 
+                                         class="img-thumbnail" 
+                                         style="width: 40px; height: 40px; object-fit: cover;"
+                                         title="{{ icon.name }}">
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if backgrounds %}
+                    <div class="col-md-3 mb-3">
+                        <h6><i class="bi bi-image"></i> Fundos ({{ backgrounds.count }})</h6>
+                        <div class="d-flex flex-wrap">
+                            {% for bg in backgrounds|slice:":4" %}
+                                <div class="me-2 mb-2">
+                                    <img src="{{ bg.extracted_file.url }}" 
+                                         class="img-thumbnail" 
+                                         style="width: 60px; height: 40px; object-fit: cover;"
+                                         title="{{ bg.name }}">
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if buttons %}
+                    <div class="col-md-3 mb-3">
+                        <h6><i class="bi bi-square"></i> Botões ({{ buttons.count }})</h6>
+                        <div class="d-flex flex-wrap">
+                            {% for btn in buttons|slice:":6" %}
+                                <div class="me-2 mb-2">
+                                    <img src="{{ btn.extracted_file.url }}" 
+                                         class="img-thumbnail" 
+                                         style="width: 50px; height: 30px; object-fit: cover;"
+                                         title="{{ btn.name }}">
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if other_images %}
+                    <div class="col-md-3 mb-3">
+                        <h6><i class="bi bi-images"></i> Outras ({{ other_images.count }})</h6>
+                        <div class="d-flex flex-wrap">
+                            {% for img in other_images|slice:":6" %}
+                                <div class="me-2 mb-2">
+                                    <img src="{{ img.extracted_file.url }}" 
+                                         class="img-thumbnail" 
+                                         style="width: 50px; height: 50px; object-fit: cover;"
+                                         title="{{ img.name }}">
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Images List -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list"></i> Todas as Imagens ({{ images.count }})
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Preview</th>
+                                <th>Nome</th>
+                                <th>Tipo</th>
+                                <th>Dimensões</th>
+                                <th>Tamanho</th>
+                                <th>Qualidade</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for image in images %}
+                            <tr>
+                                <td>
+                                    <img src="{{ image.extracted_file.url }}" 
+                                         class="img-thumbnail" 
+                                         style="width: 50px; height: 50px; object-fit: cover;">
+                                </td>
+                                <td>{{ image.name }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        {{ image.get_asset_type_display }}
+                                    </span>
+                                </td>
+                                <td>{{ image.width }}x{{ image.height }}</td>
+                                <td>{{ image.file_size|filesizeformat }}</td>
+                                <td>
+                                    {% if image.quality_rating %}
+                                        <span class="badge quality-{{ image.quality_rating }} quality-badge">
+                                            {{ image.get_quality_rating_display }}
+                                        </span>
+                                        <br>
+                                        <small class="text-muted">{{ image.quality_score|floatformat:0 }}%</small>
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'image_detail' image.pk %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> Ver
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis Info -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h6><i class="bi bi-info-circle"></i> Informações da Análise</h6>
+                <p class="text-muted mb-0">
+                    <strong>Arquivo:</strong> {{ aia_file.name }} | 
+                    <strong>Analisado em:</strong> {{ evaluation.evaluated_at|date:"d/m/Y H:i" }} |
+                    <strong>Total de imagens:</strong> {{ images.count }}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
