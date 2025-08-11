@@ -800,7 +800,9 @@ def analyze_layout_and_spacing(temp_dir):
     baseado nos trabalhos de Nascimento & Brehm (2022)
     """
     layout_issues = []
+    typography_issues = []
     screens_analyzed = 0
+    all_components = []  # Para análise de tipografia
     
     # Encontrar todos os arquivos .scm
     for root, dirs, files in os.walk(temp_dir):
@@ -814,6 +816,10 @@ def analyze_layout_and_spacing(temp_dir):
                     if screen_data:
                         screens_analyzed += 1
                         
+                        # Coletar todos os componentes para análise de tipografia
+                        components = extract_all_components(screen_data)
+                        all_components.extend(components)
+                        
                         # Verificar margens da tela
                         if not check_screen_margins(screen_data):
                             layout_issues.append(f"Screen {screen_name}: Falta de margens adequadas nas laterais")
@@ -826,11 +832,18 @@ def analyze_layout_and_spacing(temp_dir):
                     print(f"Erro ao analisar {file}: {str(e)}")
                     continue
     
+    # Análise de tipografia em todos os componentes
+    typography_analysis = analyze_typography(all_components)
+    
     return {
         'screens_analyzed': screens_analyzed,
         'layout_issues': layout_issues,
+        'typography_issues': typography_analysis.get('issues', []),
         'has_margin_issues': any('margens' in issue for issue in layout_issues),
-        'has_spacing_issues': any('espaçamento' in issue for issue in layout_issues)
+        'has_spacing_issues': any('espaçamento' in issue for issue in layout_issues),
+        'has_font_issues': typography_analysis.get('has_font_issues', False),
+        'has_bold_issues': typography_analysis.get('has_bold_issues', False),
+        'typography_stats': typography_analysis.get('stats', {})
     }
 
 
@@ -1054,15 +1067,21 @@ def generate_layout_recommendations(layout_analysis):
     
     screens_analyzed = layout_analysis.get('screens_analyzed', 0)
     layout_issues = layout_analysis.get('layout_issues', [])
+    typography_issues = layout_analysis.get('typography_issues', [])
     has_margin_issues = layout_analysis.get('has_margin_issues', False)
     has_spacing_issues = layout_analysis.get('has_spacing_issues', False)
+    has_font_issues = layout_analysis.get('has_font_issues', False)
+    has_bold_issues = layout_analysis.get('has_bold_issues', False)
+    typography_stats = layout_analysis.get('typography_stats', {})
     
     if screens_analyzed == 0:
         recommendations.append("⚠️ **Não foi possível analisar as telas do projeto.** Verifique se o arquivo .aia está íntegro.")
         return recommendations
     
     # Relatório geral
-    recommendations.append(f"📊 **{screens_analyzed} tela(s) analisada(s) para padrões de layout**")
+    recommendations.append(f"📊 **{screens_analyzed} tela(s) analisada(s) para padrões de layout e tipografia**")
+    
+    # === RECOMENDAÇÕES DE LAYOUT ===
     
     # Recomendações específicas por tipo de problema
     if has_margin_issues:
@@ -1079,19 +1098,193 @@ def generate_layout_recommendations(layout_analysis):
             "e outros elementos interativos para melhorar a legibilidade."
         )
     
-    # Recomendações específicas por tela
+    # === RECOMENDAÇÕES DE TIPOGRAFIA ===
+    
+    if has_font_issues:
+        font_count = typography_stats.get('unique_fonts', 0)
+        recommendations.append(
+            f"🔤 **Problema de Consistência Tipográfica:** {font_count} fontes diferentes detectadas. "
+            "Recomendação: Use no máximo 2 fontes (uma para títulos e outra para corpo de texto) "
+            "para manter a consistência visual e profissionalismo."
+        )
+    
+    if has_bold_issues:
+        bold_texts_count = typography_stats.get('bold_long_texts', 0)
+        recommendations.append(
+            f"📝 **Uso Abusivo de Negrito:** {bold_texts_count} texto(s) longo(s) em negrito detectado(s). "
+            "Recomendação: Reserve o negrito para destacar palavras-chave ou frases curtas. "
+            "Parágrafos longos em negrito dificultam a leitura."
+        )
+    
+    # Recomendações específicas por tela e tipografia
     if layout_issues:
-        recommendations.append("🔍 **Detalhes por tela:**")
+        recommendations.append("🔍 **Detalhes de layout por tela:**")
         for issue in layout_issues:
             recommendations.append(f"  • {issue}")
     
+    if typography_issues:
+        recommendations.append("🔍 **Detalhes de tipografia:**")
+        for issue in typography_issues:
+            recommendations.append(f"  • {issue}")
+    
     # Dicas proativas
-    if not has_margin_issues and not has_spacing_issues:
-        recommendations.append("✅ **Excelente!** Layout bem estruturado com margens e espaçamento adequados.")
+    if not has_margin_issues and not has_spacing_issues and not has_font_issues and not has_bold_issues:
+        recommendations.append("✅ **Excelente!** Layout bem estruturado com margens, espaçamento e tipografia adequados.")
     else:
         recommendations.append(
-            "💡 **Dica:** Interfaces bem espaçadas seguem a regra dos múltiplos de 8px. "
-            "Use 8px, 16px, 24px para espaçamentos e 16dp-24dp para margens laterais."
+            "💡 **Dicas de Design:** "
+            "• Interfaces bem espaçadas seguem a regra dos múltiplos de 8px "
+            "• Use hierarquia tipográfica: títulos maiores, texto normal menor "
+            "• Mantenha consistência: mesma fonte para elementos similares"
         )
     
     return recommendations
+
+
+def extract_all_components(screen_data):
+    """
+    Extrai todos os componentes de uma tela de forma recursiva
+    para análise de tipografia
+    """
+    all_components = []
+    
+    try:
+        properties = screen_data.get('Properties', {})
+        components = properties.get('$Components', [])
+        
+        def extract_recursive(component_list):
+            for component in component_list:
+                all_components.append(component)
+                # Recursivamente extrair subcomponentes
+                sub_components = component.get('$Components', [])
+                if sub_components:
+                    extract_recursive(sub_components)
+        
+        extract_recursive(components)
+        
+    except Exception as e:
+        print(f"Erro ao extrair componentes: {str(e)}")
+    
+    return all_components
+
+
+def analyze_typography(all_components):
+    """
+    Analisa a tipografia de todos os componentes do projeto
+    Implementa as Tarefas 2.1 e 2.2
+    """
+    # Estatísticas gerais
+    font_issues = []
+    bold_issues = []
+    
+    # Para análise de consistência de fontes
+    unique_fonts = set()
+    
+    # Para análise de uso de negrito
+    bold_long_texts = []
+    
+    # Componentes que podem ter propriedades tipográficas
+    text_components = ['Label', 'Button', 'TextBox', 'Textarea', 'PasswordTextBox']
+    
+    for component in all_components:
+        component_type = component.get('$Type', '')
+        component_name = component.get('$Name', 'Unnamed')
+        
+        if component_type in text_components:
+            # Tarefa 2.1: Verificar consistência de fontes
+            font_typeface = component.get('FontTypeface', '')
+            if font_typeface and font_typeface.strip():
+                unique_fonts.add(font_typeface.strip())
+            
+            # Tarefa 2.2: Verificar uso abusivo de negrito
+            is_bold = component.get('FontBold', 'False')
+            text_content = component.get('Text', '')
+            
+            if str(is_bold).lower() == 'true' and text_content:
+                word_count = len(text_content.split())
+                if word_count > 15:  # Texto longo em negrito
+                    bold_long_texts.append({
+                        'component': component_name,
+                        'type': component_type,
+                        'word_count': word_count,
+                        'text_preview': text_content[:50] + '...' if len(text_content) > 50 else text_content
+                    })
+    
+    # Gerar issues específicos
+    
+    # Tarefa 2.1: Verificar se há muitas fontes diferentes
+    has_font_issues = len(unique_fonts) > 2
+    if has_font_issues:
+        fonts_list = ', '.join(list(unique_fonts))
+        font_issues.append(f"Muitas fontes detectadas: {fonts_list}")
+    
+    # Tarefa 2.2: Verificar textos longos em negrito
+    has_bold_issues = len(bold_long_texts) > 0
+    if has_bold_issues:
+        for bold_text in bold_long_texts:
+            bold_issues.append(
+                f"Componente '{bold_text['component']}' ({bold_text['type']}) "
+                f"tem {bold_text['word_count']} palavras em negrito: {bold_text['text_preview']}"
+            )
+    
+    # Compilar todas as issues
+    all_issues = font_issues + bold_issues
+    
+    return {
+        'issues': all_issues,
+        'has_font_issues': has_font_issues,
+        'has_bold_issues': has_bold_issues,
+        'stats': {
+            'unique_fonts': len(unique_fonts),
+            'fonts_list': list(unique_fonts),
+            'bold_long_texts': len(bold_long_texts),
+            'bold_details': bold_long_texts
+        }
+    }
+
+
+def check_font_consistency(all_components):
+    """
+    Tarefa 2.1: Verificar consistência de fontes
+    Garante que o aplicativo não use uma quantidade excessiva de fontes diferentes
+    """
+    unique_fonts = set()
+    text_components = ['Label', 'Button', 'TextBox', 'Textarea', 'PasswordTextBox']
+    
+    for component in all_components:
+        component_type = component.get('$Type', '')
+        
+        if component_type in text_components:
+            font_typeface = component.get('FontTypeface', '')
+            if font_typeface and font_typeface.strip():
+                unique_fonts.add(font_typeface.strip())
+    
+    # Se mais de 2 fontes diferentes, retorna False (inconsistente)
+    return len(unique_fonts) <= 2, list(unique_fonts)
+
+
+def check_bold_usage(all_components):
+    """
+    Tarefa 2.2: Verificar uso abusivo de negrito
+    Identifica parágrafos longos que estão inteiramente em negrito
+    """
+    problematic_components = []
+    
+    for component in all_components:
+        component_type = component.get('$Type', '')
+        component_name = component.get('$Name', 'Unnamed')
+        
+        if component_type == 'Label':  # Focando em Labels que são mais usados para texto
+            is_bold = component.get('FontBold', 'False')
+            text_content = component.get('Text', '')
+            
+            if str(is_bold).lower() == 'true' and text_content:
+                word_count = len(text_content.split())
+                if word_count > 15:  # Limite de 15 palavras
+                    problematic_components.append({
+                        'name': component_name,
+                        'word_count': word_count,
+                        'text': text_content
+                    })
+    
+    return len(problematic_components) == 0, problematic_components
