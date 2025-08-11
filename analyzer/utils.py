@@ -757,7 +757,7 @@ Total de Assets Analisados: {images.count() if hasattr(images, 'count') else len
         report_sections.append(f"""
 💡 **RECOMENDAÇÕES PARA MELHORIA:**
 
-{chr(10).join(recommendations)}
+{recommendations}
 """)
 
     # === CONCLUSÃO ===

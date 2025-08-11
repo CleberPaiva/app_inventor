@@ -10,7 +10,15 @@ def markdown_to_html(text):
     if not text:
         return ""
     
-    # Convert headers
+    # Ensure text is a string and handle any encoding issues
+    if isinstance(text, bytes):
+        text = text.decode('utf-8')
+    text = str(text)
+    
+    # Convert headers with emojis
+    text = re.sub(r'^([📊🎯🏆🥇🥈🥉❌✅⚠️🔴💾📐🎨💡🚨])\s+\*\*(.+?)\*\*', r'<h3><span class="emoji">\1</span> <strong>\2</strong></h3>', text, flags=re.MULTILINE)
+    
+    # Convert regular headers
     text = re.sub(r'^#\s+(.+)$', r'<h1>\1</h1>', text, flags=re.MULTILINE)
     text = re.sub(r'^##\s+(.+)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
     text = re.sub(r'^###\s+(.+)$', r'<h3>\1</h3>', text, flags=re.MULTILINE)
@@ -27,24 +35,44 @@ def markdown_to_html(text):
     text = re.sub(r'^═+$', r'<hr class="double-line">', text, flags=re.MULTILINE)
     text = re.sub(r'^─+$', r'<hr class="single-line">', text, flags=re.MULTILINE)
     
-    # Convert emoji headers (like 📊, 🎯, etc.)
-    text = re.sub(r'^([📊🎯🏆🥇🥈🥉❌✅⚠️🔴💾📐🎨])\s+\*\*(.+?)\*\*', r'<h3><span class="emoji">\1</span>\2</h3>', text, flags=re.MULTILINE)
+    # Convert line breaks to paragraphs, but preserve existing structure
+    lines = text.split('\n')
+    formatted_lines = []
+    in_list = False
     
-    # Convert paragraphs (double line breaks)
-    text = re.sub(r'\n\n+', '</p><p>', text)
-    text = '<p>' + text + '</p>'
+    for line in lines:
+        line = line.strip()
+        if not line:
+            if in_list:
+                formatted_lines.append('</ul>')
+                in_list = False
+            formatted_lines.append('<br>')
+            continue
+            
+        if line.startswith('<li>'):
+            if not in_list:
+                formatted_lines.append('<ul>')
+                in_list = True
+            formatted_lines.append(line)
+        else:
+            if in_list:
+                formatted_lines.append('</ul>')
+                in_list = False
+            if not line.startswith('<h') and not line.startswith('<hr'):
+                formatted_lines.append(f'<p>{line}</p>')
+            else:
+                formatted_lines.append(line)
     
-    # Clean up empty paragraphs
-    text = re.sub(r'<p></p>', '', text)
-    text = re.sub(r'<p>\s*</p>', '', text)
+    if in_list:
+        formatted_lines.append('</ul>')
     
-    # Wrap lists in ul tags
-    text = re.sub(r'(<li>.*?</li>)', lambda m: '<ul>' + m.group(1) + '</ul>', text, flags=re.DOTALL)
+    result = '\n'.join(formatted_lines)
     
-    # Convert line breaks to <br>
-    text = text.replace('\n', '<br>')
+    # Clean up multiple breaks
+    result = re.sub(r'(<br>\s*){3,}', '<br><br>', result)
+    result = re.sub(r'<p></p>', '', result)
     
-    return mark_safe(text)
+    return mark_safe(result)
 
 @register.filter
 def format_report(text):
@@ -52,19 +80,10 @@ def format_report(text):
     if not text:
         return ""
     
-    # Split into sections
-    sections = text.split('\n\n')
-    formatted_sections = []
+    # Ensure we have a proper string
+    if isinstance(text, bytes):
+        text = text.decode('utf-8')
+    text = str(text)
     
-    for section in sections:
-        if not section.strip():
-            continue
-            
-        # Add section wrapper
-        if section.startswith('📊') or section.startswith('🎯') or section.startswith('✅'):
-            formatted_sections.append(f'<div class="section">{section}</div>')
-        else:
-            formatted_sections.append(section)
-    
-    result = '\n\n'.join(formatted_sections)
-    return markdown_to_html(result)
+    # Apply markdown conversion
+    return markdown_to_html(text)
