@@ -210,32 +210,38 @@ def print_analysis(request, pk):
     total_images = images.count()
     total_icons = images.filter(asset_type='icon').count()
     
-    # Gerar recomendações baseadas na análise
-    recommendations = []
+    # Usar as recomendações detalhadas do sistema
+    detailed_recommendations = evaluation.recommendations if evaluation.recommendations else ""
     
-    if evaluation.image_quality_score < 70:
-        recommendations.append("Considere otimizar as imagens para melhor qualidade. Use pelo menos 640x480px para garantir qualidade visual em diferentes dispositivos.")
-    
-    if low_quality_count > 0:
-        recommendations.append(f"Substitua as {low_quality_count} imagem(ns) de baixa qualidade por versões com maior resolução e melhor compressão.")
-    
-    if evaluation.overall_usability_score < 60:
-        recommendations.append("O score geral pode ser melhorado. Foque nos assets com pontuação mais baixa para maior impacto.")
-    
-    if total_icons == 0:
-        recommendations.append("Considere adicionar ícones para melhorar a experiência do usuário e facilitar a navegação.")
-    
-    if evaluation.image_quality_score == 100 and evaluation.overall_usability_score > 80:
-        recommendations.append("Excelente trabalho! Seu projeto apresenta alta qualidade de usabilidade.")
-    
-    # Adicionar recomendações específicas baseadas em proporções
-    irregular_proportions = 0
-    for image in images:
-        if image.aspect_ratio < 0.8 or image.aspect_ratio > 1.25:
-            irregular_proportions += 1
-    
-    if irregular_proportions > 0:
-        recommendations.append(f"Ajuste as proporções de {irregular_proportions} imagem(ns) para melhor adaptação em dispositivos móveis. Prefira proporções como 16:9, 4:3 ou 1:1.")
+    # Se não há recomendações salvas, gerar recomendações básicas
+    if not detailed_recommendations:
+        recommendations = []
+        
+        if evaluation.image_quality_score < 70:
+            recommendations.append("Considere otimizar as imagens para melhor qualidade. Use pelo menos 640x480px para garantir qualidade visual em diferentes dispositivos.")
+        
+        if low_quality_count > 0:
+            recommendations.append(f"Substitua as {low_quality_count} imagem(ns) de baixa qualidade por versões com maior resolução e melhor compressão.")
+        
+        if evaluation.overall_usability_score < 60:
+            recommendations.append("O score geral pode ser melhorado. Foque nos assets com pontuação mais baixa para maior impacto.")
+        
+        if total_icons == 0:
+            recommendations.append("Considere adicionar ícones para melhorar a experiência do usuário e facilitar a navegação.")
+        
+        if evaluation.image_quality_score == 100 and evaluation.overall_usability_score > 80:
+            recommendations.append("Excelente trabalho! Seu projeto apresenta alta qualidade de usabilidade.")
+        
+        # Adicionar recomendações específicas baseadas em proporções
+        irregular_proportions = 0
+        for image in images:
+            if image.aspect_ratio < 0.8 or image.aspect_ratio > 1.25:
+                irregular_proportions += 1
+        
+        if irregular_proportions > 0:
+            recommendations.append(f"Ajuste as proporções de {irregular_proportions} imagem(ns) para melhor adaptação em dispositivos móveis. Prefira proporções como 16:9, 4:3 ou 1:1.")
+        
+        detailed_recommendations = '\n'.join([f"• {rec}" for rec in recommendations])
     
     context = {
         'aia_file': aia_file,
@@ -246,7 +252,7 @@ def print_analysis(request, pk):
         'high_quality_count': high_quality_count,
         'medium_quality_count': medium_quality_count,
         'low_quality_count': low_quality_count,
-        'recommendations': recommendations,
+        'detailed_recommendations': detailed_recommendations,
     }
     
     return render(request, 'analyzer/print_analysis.html', context)

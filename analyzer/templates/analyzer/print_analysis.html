@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% load report_filters %}
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
@@ -177,6 +178,97 @@
             font-weight: bold;
         }
 
+        /* Estilos para relatório detalhado */
+        .detailed-report {
+            background-color: #fafafa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            font-size: 11pt;
+            line-height: 1.6;
+        }
+
+        .detailed-report h1 {
+            color: #1976d2;
+            font-size: 16pt;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #1976d2;
+            padding-bottom: 5px;
+        }
+
+        .detailed-report h2 {
+            color: #1976d2;
+            font-size: 14pt;
+            margin-top: 15px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 3px;
+        }
+
+        .detailed-report h3 {
+            color: #1976d2;
+            font-size: 13pt;
+            margin-top: 12px;
+            margin-bottom: 6px;
+        }
+
+        .detailed-report h4 {
+            color: #555;
+            font-size: 12pt;
+            margin-top: 10px;
+            margin-bottom: 5px;
+        }
+
+        .detailed-report p {
+            margin-bottom: 10px;
+            text-align: justify;
+        }
+
+        .detailed-report strong {
+            color: #333;
+            font-weight: bold;
+        }
+
+        .detailed-report ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .detailed-report li {
+            margin-bottom: 5px;
+            list-style-type: disc;
+        }
+
+        .detailed-report hr.double-line {
+            border: none;
+            border-top: 2px solid #1976d2;
+            margin: 20px 0;
+        }
+
+        .detailed-report hr.single-line {
+            border: none;
+            border-top: 1px solid #ccc;
+            margin: 15px 0;
+        }
+
+        /* Formatação para emojis e símbolos */
+        .detailed-report .emoji {
+            font-size: 14pt;
+            margin-right: 5px;
+        }
+
+        /* Quebras de linha para seções */
+        .detailed-report .section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px dotted #ccc;
+        }
+
+        .detailed-report .section:last-child {
+            border-bottom: none;
+        }
+
         /* Rodapé */
         .footer {
             margin-top: 30px;
@@ -313,15 +405,13 @@
         </div>
     </div>
 
-    <!-- Recomendações -->
-    {% if recommendations %}
+    <!-- Recomendações Detalhadas -->
+    {% if detailed_recommendations %}
     <div class="recommendations">
-        <h3>Recomendações para Melhoria</h3>
-        {% for recommendation in recommendations %}
-            <div class="recommendation-item">
-                {{ recommendation }}
-            </div>
-        {% endfor %}
+        <h3>📊 Relatório Completo de Análise de Usabilidade</h3>
+        <div class="detailed-report">
+            {{ detailed_recommendations|format_report }}
+        </div>
     </div>
     {% endif %}
 
