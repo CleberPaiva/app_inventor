@@ -648,8 +648,8 @@ def generate_usability_evaluation(aia_file, layout_analysis=None, icon_analysis=
     oversized_count = images.filter(file_size__gt=1024*1024).count()  # > 1MB
     undersized_count = images.filter(width__lt=100, height__lt=100).count()
     
-    # Generate recommendations
-    recommendations = generate_recommendations(aia_file, images)
+    # Generate comprehensive usability report
+    recommendations = generate_comprehensive_usability_report(aia_file, list(images), scores, layout_analysis, icon_analysis)
     
     # Adicionar recomendações de layout se disponível
     if layout_analysis:
@@ -689,96 +689,297 @@ def generate_usability_evaluation(aia_file, layout_analysis=None, icon_analysis=
         evaluation.save()
 
 
-def generate_recommendations(aia_file, images):
-    """Generate specific recommendations for improving usability with granular scoring context"""
+def generate_comprehensive_usability_report(aia_file, images, scores, layout_analysis=None, icon_analysis=None):
+    """
+    Gera um relatório completo de análise de usabilidade explicando cada pontuação
+    e critério de avaliação utilizado
+    """
+    report_sections = []
     
+    # === CABEÇALHO DO RELATÓRIO ===
+    report_sections.append(f"""
+📊 **RELATÓRIO DE ANÁLISE DE USABILIDADE**
+Arquivo: {aia_file.name}
+Data da Análise: {timezone.now().strftime('%d/%m/%Y às %H:%M')}
+Total de Assets Analisados: {images.count()}
+
+═══════════════════════════════════════════════════════════════
+""")
+
+    # === PONTUAÇÃO GERAL ===
+    overall_score = scores['overall_score']
+    if overall_score >= 90:
+        grade = "🏆 EXCELENTE"
+        grade_desc = "Aplicativo com qualidade excepcional"
+    elif overall_score >= 80:
+        grade = "🥇 MUITO BOM"
+        grade_desc = "Aplicativo com alta qualidade"
+    elif overall_score >= 70:
+        grade = "🥈 BOM"
+        grade_desc = "Aplicativo com qualidade satisfatória"
+    elif overall_score >= 60:
+        grade = "🥉 RAZOÁVEL"
+        grade_desc = "Aplicativo precisa de melhorias"
+    else:
+        grade = "❌ INSATISFATÓRIO"
+        grade_desc = "Aplicativo precisa de revisão completa"
+
+    report_sections.append(f"""
+🎯 **AVALIAÇÃO GERAL: {overall_score:.1f}/100 - {grade}**
+{grade_desc}
+
+📊 **BREAKDOWN DA PONTUAÇÃO:**
+• Qualidade de Imagens: {scores['image_quality_score']:.1f}/100
+• Qualidade de Ícones: {scores['icon_quality_score']:.1f}/100
+• Score Final: ({scores['image_quality_score']:.1f} + {scores['icon_quality_score']:.1f}) ÷ 2 = {overall_score:.1f}
+
+""")
+
+    # === ANÁLISE DETALHADA POR CATEGORIA ===
+    
+    # Análise de Imagens
+    image_assets = [asset for asset in images if asset.asset_type in ['image', 'background', 'button', 'other']]
+    if image_assets:
+        report_sections.append(generate_image_quality_analysis(image_assets, scores['image_quality_score']))
+    
+    # Análise de Ícones
+    icon_assets = [asset for asset in images if asset.asset_type == 'icon']
+    if icon_assets:
+        report_sections.append(generate_icon_quality_analysis(icon_assets, scores['icon_quality_score'], icon_analysis))
+    
+    # === ANÁLISE ACADÊMICA (LAYOUT, TIPOGRAFIA, CORES) ===
+    if layout_analysis:
+        report_sections.append(generate_academic_analysis_report(layout_analysis))
+    
+    # === RECOMENDAÇÕES ESPECÍFICAS ===
+    recommendations = generate_detailed_recommendations(aia_file, images, scores)
+    if recommendations:
+        report_sections.append(f"""
+💡 **RECOMENDAÇÕES PARA MELHORIA:**
+
+{chr(10).join(recommendations)}
+""")
+
+    # === CONCLUSÃO ===
+    report_sections.append(f"""
+═══════════════════════════════════════════════════════════════
+
+✅ **RESUMO EXECUTIVO:**
+Este relatório avaliou {images.count()} asset(s) usando critérios acadêmicos baseados em:
+• Resolução e otimização de arquivos (40% da nota)
+• Proporções adequadas para dispositivos móveis (30% da nota)  
+• Consistência visual e padrões de design (30% da nota)
+
+📚 **BASE ACADÊMICA:**
+Análise baseada em Nascimento & Brehm (2022), Solecki (2020), e diretrizes 
+WCAG 2.1 AA para garantir qualidade educacional e acessibilidade.
+
+🎓 **OBJETIVO EDUCACIONAL:**
+Este sistema foi desenvolvido para auxiliar estudantes a compreender 
+boas práticas de design de interface móvel no contexto do App Inventor.
+""")
+
+    return '\n'.join(report_sections)
+
+
+def generate_image_quality_analysis(image_assets, image_score):
+    """Gera análise detalhada da qualidade das imagens"""
+    if not image_assets:
+        return ""
+    
+    # Calcular estatísticas
+    total_images = len(image_assets)
+    excellent_count = len([img for img in image_assets if calculate_asset_quality_score(img) >= 85])
+    good_count = len([img for img in image_assets if 70 <= calculate_asset_quality_score(img) < 85])
+    medium_count = len([img for img in image_assets if 50 <= calculate_asset_quality_score(img) < 70])
+    poor_count = len([img for img in image_assets if calculate_asset_quality_score(img) < 50])
+    
+    # Análise de tamanhos
+    oversized = len([img for img in image_assets if img.file_size > 1024*1024])
+    undersized = len([img for img in image_assets if img.width < 300 or img.height < 300])
+    
+    return f"""
+🖼️ **ANÁLISE DE QUALIDADE DAS IMAGENS: {image_score:.1f}/100**
+
+📊 **DISTRIBUIÇÃO POR QUALIDADE:**
+• Excelente (85-100): {excellent_count}/{total_images} imagens ({excellent_count/total_images*100:.1f}%)
+• Boa (70-84): {good_count}/{total_images} imagens ({good_count/total_images*100:.1f}%)
+• Média (50-69): {medium_count}/{total_images} imagens ({medium_count/total_images*100:.1f}%)
+• Baixa (<50): {poor_count}/{total_images} imagens ({poor_count/total_images*100:.1f}%)
+
+🔍 **CRITÉRIOS DE AVALIAÇÃO:**
+1. **Resolução (40% da nota):** Imagens devem ter pelo menos 640×480px
+2. **Otimização (30% da nota):** 1-4 bytes por pixel indica boa compressão
+3. **Proporções (30% da nota):** Adequadas para dispositivos móveis
+
+⚠️ **PROBLEMAS DETECTADOS:**
+• {oversized} imagem(ns) muito pesada(s) (>1MB)
+• {undersized} imagem(ns) com resolução muito baixa
+
+📈 **COMO MELHORAR A PONTUAÇÃO:**
+• Resolução ideal: 1920×1080px ou superior para imagens principais
+• Compressão: Use ferramentas como TinyPNG para otimizar sem perder qualidade
+• Formato: PNG para ícones e logos, JPEG para fotos
+"""
+
+
+def generate_icon_quality_analysis(icon_assets, icon_score, icon_analysis=None):
+    """Gera análise detalhada da qualidade dos ícones"""
+    if not icon_assets:
+        return ""
+    
+    total_icons = len(icon_assets)
+    material_icons = len([icon for icon in icon_assets if hasattr(icon, 'is_material_icon') and icon.is_material_icon])
+    
+    # Análise de tamanhos
+    standard_sizes = [24, 48, 72, 96, 128, 192, 256, 512]
+    standard_count = len([icon for icon in icon_assets if icon.width in standard_sizes and icon.height in standard_sizes])
+    square_count = len([icon for icon in icon_assets if icon.width == icon.height])
+    
+    # Penalização por inconsistência
+    consistency_penalty = ""
+    if icon_analysis and icon_analysis.get('has_style_inconsistency', False):
+        styles_used = icon_analysis.get('stats', {}).get('styles_used', [])
+        consistency_penalty = f"\n❌ **PENALIZAÇÃO APLICADA:** -20 pontos por inconsistência de estilos Material Design\n• Estilos encontrados: {', '.join(styles_used)}"
+    
+    return f"""
+🎨 **ANÁLISE DE QUALIDADE DOS ÍCONES: {icon_score:.1f}/100**
+
+� **ESTATÍSTICAS GERAIS:**
+• Total de ícones: {total_icons}
+• Ícones Material Design detectados: {material_icons}/{total_icons}
+• Ícones quadrados: {square_count}/{total_icons} ({square_count/total_icons*100:.1f}%)
+• Ícones em tamanhos padrão: {standard_count}/{total_icons} ({standard_count/total_icons*100:.1f}%)
+
+🔍 **CRITÉRIOS DE AVALIAÇÃO:**
+1. **Resolução (40% da nota):** Ícones devem ter pelo menos 128×128px
+2. **Padrão Material Design (30% da nota):** Tamanhos múltiplos de 24px
+3. **Consistência (30% da nota):** Formato quadrado e estilo uniforme
+{consistency_penalty}
+
+📐 **TAMANHOS RECOMENDADOS (Material Design):**
+• Interface: 24px, 48px (densidade padrão)
+• Launcher: 48dp, 72dp, 96dp, 144dp, 192dp
+• Densidade alta: 36px, 72px, 108px
+
+📈 **COMO MELHORAR A PONTUAÇÃO:**
+• Use apenas um estilo Material Design por aplicativo
+• Mantenha proporções quadradas (1:1)
+• Prefira tamanhos padrão: 24, 48, 72, 96, 128, 192, 256px
+• Use SVG quando possível para escalabilidade perfeita
+"""
+
+
+def generate_academic_analysis_report(layout_analysis):
+    """Gera relatório da análise acadêmica (layout, tipografia, cores)"""
+    if not layout_analysis:
+        return ""
+    
+    screens_analyzed = layout_analysis.get('screens_analyzed', 0)
+    has_margin_issues = layout_analysis.get('has_margin_issues', False)
+    has_spacing_issues = layout_analysis.get('has_spacing_issues', False)
+    has_font_issues = layout_analysis.get('has_font_issues', False)
+    has_bold_issues = layout_analysis.get('has_bold_issues', False)
+    has_contrast_issues = layout_analysis.get('has_contrast_issues', False)
+    has_saturation_issues = layout_analysis.get('has_saturation_issues', False)
+    
+    # Calcular score acadêmico
+    total_issues = sum([has_margin_issues, has_spacing_issues, has_font_issues, 
+                       has_bold_issues, has_contrast_issues, has_saturation_issues])
+    academic_score = max(0, 100 - (total_issues * 15))  # -15 pontos por problema
+    
+    if academic_score >= 90:
+        academic_grade = "🏆 EXCELENTE"
+    elif academic_score >= 75:
+        academic_grade = "🥇 MUITO BOM"  
+    elif academic_score >= 60:
+        academic_grade = "🥈 BOM"
+    else:
+        academic_grade = "❌ PRECISA MELHORAR"
+    
+    return f"""
+🎓 **ANÁLISE ACADÊMICA: {academic_score}/100 - {academic_grade}**
+Baseada em Nascimento & Brehm (2022) e Solecki (2020)
+
+📊 **TELAS ANALISADAS:** {screens_analyzed}
+
+🏗️ **LAYOUT E ESPAÇAMENTO (Parte 1):**
+• Margens adequadas: {'❌ Problema detectado' if has_margin_issues else '✅ Adequadas'}
+• Espaçamento entre elementos: {'❌ Problema detectado' if has_spacing_issues else '✅ Adequado'}
+
+🔤 **TIPOGRAFIA (Parte 2):**
+• Consistência de fontes: {'❌ Muitas fontes diferentes' if has_font_issues else '✅ Consistente'}
+• Uso de negrito: {'❌ Abuso de negrito detectado' if has_bold_issues else '✅ Uso adequado'}
+
+🎨 **CORES (Parte 3):**
+• Contraste WCAG AA: {'❌ Problemas de contraste' if has_contrast_issues else '✅ Adequado'}
+• Saturação de cores: {'❌ Cores muito saturadas' if has_saturation_issues else '✅ Adequada'}
+
+📚 **METODOLOGIA:**
+• **Parte 1:** Análise de margens e espaçamento baseada em múltiplos de 8px
+• **Parte 2:** Verificação de consistência tipográfica e legibilidade
+• **Parte 3:** Análise WCAG 2.1 AA (contraste 4.5:1) e detecção de cores neon
+• **Parte 4:** Consistência de ícones Material Design
+
+🎯 **PONTUAÇÃO:**
+Cada problema detectado reduz 15 pontos da nota acadêmica.
+Score atual: 100 - ({total_issues} × 15) = {academic_score} pontos
+"""
+
+
+def generate_detailed_recommendations(aia_file, images, scores):
+    """Gera recomendações detalhadas baseadas na análise completa"""
     recommendations = []
     
-    # Calcula scores gerais para contexto
-    scores = calculate_overall_scores(list(images))
+    overall_score = scores['overall_score']
     
-    # Estatísticas detalhadas por score
-    excellent_images = images.filter(quality_score__gte=85)
-    good_images = images.filter(quality_score__gte=70, quality_score__lt=85)
-    medium_images = images.filter(quality_score__gte=50, quality_score__lt=70)
-    poor_images = images.filter(quality_score__lt=50)
-    
-    # Recomendações baseadas na distribuição de qualidade
-    if poor_images.exists():
+    # Recomendações baseadas no score geral
+    if overall_score < 70:
         recommendations.append(
-            f"🔴 **{poor_images.count()} asset(s) com qualidade muito baixa** (score < 50). "
-            f"Estes assets precisam de atenção imediata para melhorar resolução, otimização ou proporções."
+            "🚨 **AÇÃO URGENTE NECESSÁRIA:** Score abaixo de 70 indica problemas significativos "
+            "que afetam a qualidade do aplicativo. Priorize as correções listadas abaixo."
+        )
+    elif overall_score < 85:
+        recommendations.append(
+            "⚠️ **MELHORIAS RECOMENDADAS:** Score pode ser elevado com ajustes específicos. "
+            "Foque nos problemas de maior impacto listados abaixo."
+        )
+    else:
+        recommendations.append(
+            "✅ **QUALIDADE SATISFATÓRIA:** Continue mantendo os padrões de qualidade. "
+            "Pequenos ajustes podem levar à excelência."
         )
     
-    if medium_images.exists():
+    # Análise específica por tipo de asset
+    poor_assets = [asset for asset in images if calculate_asset_quality_score(asset) < 50]
+    if poor_assets:
         recommendations.append(
-            f"🟡 **{medium_images.count()} asset(s) com qualidade média** (score 50-69). "
-            f"Pequenos ajustes podem elevar significativamente a qualidade destes assets."
+            f"🔴 **CRÍTICO:** {len(poor_assets)} asset(s) com score abaixo de 50 necessitam "
+            f"atenção imediata. Assets críticos: {', '.join([asset.name for asset in poor_assets[:3]])}"
+            f"{'...' if len(poor_assets) > 3 else ''}"
         )
     
-    if good_images.exists() and excellent_images.count() == 0:
+    # Recomendações de otimização
+    oversized = [asset for asset in images if asset.file_size > 1024*1024]
+    if oversized:
+        total_savings = sum(asset.file_size for asset in oversized) / (1024*1024) * 0.7  # Estimativa de 70% de redução
         recommendations.append(
-            f"🟢 **{good_images.count()} asset(s) com boa qualidade** (score 70-84). "
-            f"Considere otimizações finais para alcançar excelência (score ≥ 85)."
+            f"💾 **OTIMIZAÇÃO:** Comprimir {len(oversized)} imagem(ns) pode reduzir "
+            f"aproximadamente {total_savings:.1f}MB do tamanho total do aplicativo."
         )
     
-    # Check for oversized images
-    oversized_images = images.filter(file_size__gt=1024*1024)  # > 1MB
-    if oversized_images.exists():
-        avg_size = sum(img.file_size for img in oversized_images) / len(oversized_images) / (1024*1024)
-        recommendations.append(
-            f"📦 **{oversized_images.count()} imagem(ns) muito pesada(s)** (>{avg_size:.1f}MB em média). "
-            f"Comprima estas imagens para melhorar performance do app."
-        )
-    
-    # Check for inadequate resolutions
-    low_res_images = images.filter(resolution_adequate=False)
-    if low_res_images.exists():
-        recommendations.append(
-            f"📐 **{low_res_images.count()} imagem(ns) com resolução inadequada**. "
-            f"Use pelo menos 640×480px para garantir qualidade visual em diferentes dispositivos."
-        )
-    
-    # Check for poor aspect ratios
-    bad_ratio_images = images.filter(aspect_ratio_appropriate=False)
-    if bad_ratio_images.exists():
-        recommendations.append(
-            f"📱 **{bad_ratio_images.count()} imagem(ns) com proporções inadequadas** para dispositivos móveis. "
-            f"Prefira proporções como 16:9, 4:3, 3:2 ou 1:1."
-        )
-    
-    # Icon-specific recommendations with Material Design focus
-    icons = images.filter(asset_type='icon')
-    if icons.exists():
+    # Recomendações Material Design
+    icons = [asset for asset in images if asset.asset_type == 'icon']
+    if icons:
+        # Calcular score médio dos ícones
         icon_scores = [calculate_asset_quality_score(icon) for icon in icons]
-        avg_icon_score = sum(icon_scores) / len(icon_scores)
+        avg_icon_score = sum(icon_scores) / len(icon_scores) if icon_scores else 0
         
-        # Check icon size consistency
-        icon_sizes = set((icon.width, icon.height) for icon in icons)
-        if len(icon_sizes) > 3:
+        non_square = [icon for icon in icons if icon.width != icon.height]
+        if non_square:
             recommendations.append(
-                f"🎨 **Ícones com tamanhos inconsistentes** detectados ({len(icon_sizes)} tamanhos diferentes). "
-                f"Padronize usando múltiplos de 24px: 24, 48, 72, 96px (Material Design)."
-            )
-        
-        # Check Material Design compliance
-        non_square_icons = [icon for icon in icons if icon.width != icon.height]
-        if non_square_icons:
-            recommendations.append(
-                f"⬜ **{len(non_square_icons)} ícone(s) não quadrado(s)**. "
-                f"Ícones devem ser quadrados conforme diretrizes do Material Design."
-            )
-        
-        # Material Design standard sizes
-        material_sizes = [24, 48, 72, 96, 144, 192]
-        non_standard_icons = [
-            icon for icon in icons 
-            if not any(abs(max(icon.width, icon.height) - size) <= 4 for size in material_sizes)
-        ]
-        if non_standard_icons:
-            recommendations.append(
-                f"📏 **{len(non_standard_icons)} ícone(s) com tamanhos não padronizados**. "
-                f"Use múltiplos de 24px (24, 48, 72, 96, 144, 192px) para melhor consistência."
+                f"📐 **MATERIAL DESIGN:** {len(non_square)} ícone(s) não seguem o padrão "
+                f"quadrado. Redimensione para formato 1:1 para melhor compatibilidade."
             )
         
         # Overall icon quality assessment
@@ -817,7 +1018,7 @@ def generate_recommendations(aia_file, images):
         )
     
     # Material Design promotion
-    if icons.exists():
+    if icons:
         recommendations.append(
             f"💡 **Dica Pro:** Explore a biblioteca oficial do Material Design "
             f"(https://fonts.google.com/icons) para ícones de alta qualidade que seguem "
