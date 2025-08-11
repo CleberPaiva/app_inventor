@@ -11,6 +11,14 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 import hashlib
 import json
+import re
+try:
+    import wcag_contrast_ratio
+    import colour
+    COLOR_ANALYSIS_AVAILABLE = True
+except ImportError:
+    COLOR_ANALYSIS_AVAILABLE = False
+    print("⚠️ Bibliotecas de análise de cor não disponíveis. Instale: pip install wcag-contrast-ratio colour-science")
 
 # Dicionário global para armazenar os ícones do Material Design
 MATERIAL_ICONS_DB = {}
@@ -835,15 +843,22 @@ def analyze_layout_and_spacing(temp_dir):
     # Análise de tipografia em todos os componentes
     typography_analysis = analyze_typography(all_components)
     
+    # Análise de cores em todos os componentes
+    color_analysis = analyze_colors(all_components)
+    
     return {
         'screens_analyzed': screens_analyzed,
         'layout_issues': layout_issues,
         'typography_issues': typography_analysis.get('issues', []),
+        'color_issues': color_analysis.get('issues', []),
         'has_margin_issues': any('margens' in issue for issue in layout_issues),
         'has_spacing_issues': any('espaçamento' in issue for issue in layout_issues),
         'has_font_issues': typography_analysis.get('has_font_issues', False),
         'has_bold_issues': typography_analysis.get('has_bold_issues', False),
-        'typography_stats': typography_analysis.get('stats', {})
+        'has_contrast_issues': color_analysis.get('has_contrast_issues', False),
+        'has_saturation_issues': color_analysis.get('has_saturation_issues', False),
+        'typography_stats': typography_analysis.get('stats', {}),
+        'color_stats': color_analysis.get('stats', {})
     }
 
 
@@ -1058,7 +1073,7 @@ def is_spacer_height(height):
 
 def generate_layout_recommendations(layout_analysis):
     """
-    Gera recomendações específicas baseadas na análise de layout
+    Gera recomendações específicas baseadas na análise de layout, tipografia e cores
     """
     recommendations = []
     
@@ -1068,11 +1083,15 @@ def generate_layout_recommendations(layout_analysis):
     screens_analyzed = layout_analysis.get('screens_analyzed', 0)
     layout_issues = layout_analysis.get('layout_issues', [])
     typography_issues = layout_analysis.get('typography_issues', [])
+    color_issues = layout_analysis.get('color_issues', [])
     has_margin_issues = layout_analysis.get('has_margin_issues', False)
     has_spacing_issues = layout_analysis.get('has_spacing_issues', False)
     has_font_issues = layout_analysis.get('has_font_issues', False)
     has_bold_issues = layout_analysis.get('has_bold_issues', False)
+    has_contrast_issues = layout_analysis.get('has_contrast_issues', False)
+    has_saturation_issues = layout_analysis.get('has_saturation_issues', False)
     typography_stats = layout_analysis.get('typography_stats', {})
+    color_stats = layout_analysis.get('color_stats', {})
     
     if screens_analyzed == 0:
         recommendations.append("⚠️ **Não foi possível analisar as telas do projeto.** Verifique se o arquivo .aia está íntegro.")
@@ -1127,15 +1146,47 @@ def generate_layout_recommendations(layout_analysis):
         for issue in typography_issues:
             recommendations.append(f"  • {issue}")
     
+    # === RECOMENDAÇÕES DE CORES ===
+    
+    if has_contrast_issues:
+        contrast_violations = color_stats.get('contrast_violations', 0)
+        recommendations.append(
+            f"🔴 **Problema de Contraste:** {contrast_violations} violação(ões) WCAG detectada(s). "
+            "Recomendação: Verifique se o texto está legível sobre o fundo. "
+            "Use ferramentas de verificação de contraste ou prefira cores mais escuras para texto "
+            "sobre fundos claros, e cores claras para texto sobre fundos escuros."
+        )
+    
+    if has_saturation_issues:
+        neon_colors_count = color_stats.get('neon_colors', 0)
+        recommendations.append(
+            f"🌈 **Problema de Saturação:** {neon_colors_count} cor(es) muito saturada(s) detectada(s). "
+            "Recomendação: Cores neon podem causar fadiga visual. "
+            "Prefira tons mais suaves (saturação <80%) especialmente para fundos, "
+            "textos longos e elementos que ficam visíveis por muito tempo."
+        )
+    
+    # Detalhes de cores
+    if color_issues:
+        recommendations.append("🔍 **Detalhes de análise de cores:**")
+        for issue in color_issues:
+            recommendations.append(f"  • {issue}")
+    
     # Dicas proativas
-    if not has_margin_issues and not has_spacing_issues and not has_font_issues and not has_bold_issues:
-        recommendations.append("✅ **Excelente!** Layout bem estruturado com margens, espaçamento e tipografia adequados.")
+    all_issues_resolved = (not has_margin_issues and not has_spacing_issues and 
+                          not has_font_issues and not has_bold_issues and 
+                          not has_contrast_issues and not has_saturation_issues)
+    
+    if all_issues_resolved:
+        recommendations.append("✅ **Excelente!** Layout bem estruturado com margens, espaçamento, tipografia e cores adequados.")
     else:
         recommendations.append(
             "💡 **Dicas de Design:** "
             "• Interfaces bem espaçadas seguem a regra dos múltiplos de 8px "
             "• Use hierarquia tipográfica: títulos maiores, texto normal menor "
-            "• Mantenha consistência: mesma fonte para elementos similares"
+            "• Mantenha consistência: mesma fonte para elementos similares "
+            "• Garanta contraste mínimo 4.5:1 entre texto e fundo (WCAG AA) "
+            "• Evite cores muito saturadas para reduzir fadiga visual"
         )
     
     return recommendations
@@ -1288,3 +1339,214 @@ def check_bold_usage(all_components):
                     })
     
     return len(problematic_components) == 0, problematic_components
+
+
+def analyze_colors(all_components):
+    """
+    Análise de cores de todos os componentes do projeto
+    Implementa as Tarefas 3.1 e 3.2 baseadas em Solecki (2020)
+    """
+    if not COLOR_ANALYSIS_AVAILABLE:
+        return {
+            'issues': ['⚠️ Análise de cores não disponível - bibliotecas não instaladas'],
+            'has_contrast_issues': False,
+            'has_saturation_issues': False,
+            'stats': {}
+        }
+    
+    color_issues = []
+    contrast_issues = []
+    saturation_issues = []
+    
+    # Coletar todas as cores únicas do projeto
+    all_colors = set()
+    contrast_pairs = []
+    
+    for component in all_components:
+        component_type = component.get('$Type', '')
+        component_name = component.get('$Name', 'Unnamed')
+        
+        # Coletar cores de componentes que podem ter texto e fundo
+        text_color = component.get('TextColor', '')
+        background_color = component.get('BackgroundColor', '')
+        button_color = component.get('ButtonColor', '')
+        
+        # Adicionar cores únicas para análise de saturação
+        for color in [text_color, background_color, button_color]:
+            if color and color.strip():
+                all_colors.add(color.strip())
+        
+        # Verificar contraste entre texto e fundo
+        if text_color and background_color:
+            contrast_pairs.append({
+                'component': component_name,
+                'type': component_type,
+                'text_color': text_color,
+                'background_color': background_color
+            })
+    
+    # Tarefa 3.1: Verificar contraste WCAG
+    contrast_analysis = check_color_contrast(contrast_pairs)
+    contrast_issues = contrast_analysis['issues']
+    
+    # Tarefa 3.2: Verificar saturação excessiva
+    saturation_analysis = check_color_saturation(list(all_colors))
+    saturation_issues = saturation_analysis['issues']
+    
+    # Compilar todas as issues
+    all_issues = contrast_issues + saturation_issues
+    
+    return {
+        'issues': all_issues,
+        'has_contrast_issues': len(contrast_issues) > 0,
+        'has_saturation_issues': len(saturation_issues) > 0,
+        'stats': {
+            'total_colors': len(all_colors),
+            'colors_list': list(all_colors),
+            'contrast_violations': len(contrast_issues),
+            'neon_colors': len(saturation_issues),
+            'contrast_pairs': len(contrast_pairs)
+        }
+    }
+
+
+def check_color_contrast(contrast_pairs):
+    """
+    Tarefa 3.1: Implementar Verificador de Contraste (WCAG)
+    Garante que o texto seja legível para todos os usuários
+    """
+    issues = []
+    
+    if not COLOR_ANALYSIS_AVAILABLE:
+        return {'issues': ['Verificação de contraste não disponível']}
+    
+    for pair in contrast_pairs:
+        try:
+            component_name = pair['component']
+            component_type = pair['type']
+            text_color = normalize_app_inventor_color(pair['text_color'])
+            bg_color = normalize_app_inventor_color(pair['background_color'])
+            
+            if text_color and bg_color:
+                # Normalizar RGB para 0.0-1.0 para wcag-contrast-ratio
+                text_color_normalized = [c/255.0 for c in text_color]
+                bg_color_normalized = [c/255.0 for c in bg_color]
+                
+                # Calcular taxa de contraste usando wcag-contrast-ratio
+                contrast_ratio = wcag_contrast_ratio.rgb(text_color_normalized, bg_color_normalized)
+                
+                # Verificar se atende critério WCAG AA (4.5:1)
+                if contrast_ratio < 4.5:
+                    issues.append(
+                        f"🔴 **Contraste insuficiente:** Componente '{component_name}' ({component_type}) "
+                        f"tem taxa de contraste {contrast_ratio:.2f}:1. "
+                        f"Cores: texto {pair['text_color']} sobre fundo {pair['background_color']}. "
+                        f"Recomendação: A taxa de contraste deve ser de pelo menos 4.5:1 para atender WCAG AA."
+                    )
+                
+        except Exception as e:
+            print(f"Erro ao calcular contraste para {component_name}: {str(e)}")
+            continue
+    
+    return {'issues': issues}
+
+
+def check_color_saturation(colors_list):
+    """
+    Tarefa 3.2: Detectar Cores Neon (Saturação Excessiva)
+    Evita o uso de cores excessivamente vibrantes
+    """
+    issues = []
+    neon_colors = []
+    
+    if not COLOR_ANALYSIS_AVAILABLE:
+        return {'issues': ['Verificação de saturação não disponível']}
+    
+    for color_hex in colors_list:
+        try:
+            # Normalizar cor do App Inventor para RGB
+            rgb_color = normalize_app_inventor_color(color_hex)
+            if not rgb_color:
+                continue
+            
+            # Converter RGB para HSL usando colour-science
+            rgb_normalized = [c/255.0 for c in rgb_color]  # Normalizar para 0-1
+            hsl = colour.RGB_to_HSL(rgb_normalized)
+            
+            hue = hsl[0] * 360      # Convertir para graus (0-360)
+            saturation = hsl[1]     # Já em 0-1
+            lightness = hsl[2]      # Já em 0-1
+            
+            # Detectar cores "neon": alta saturação (>80%) e alta luminosidade (>70%)
+            if saturation > 0.8 and lightness > 0.7:
+                neon_colors.append({
+                    'hex': color_hex,
+                    'saturation': saturation * 100,
+                    'lightness': lightness * 100
+                })
+                
+        except Exception as e:
+            print(f"Erro ao analisar saturação da cor {color_hex}: {str(e)}")
+            continue
+    
+    if neon_colors:
+        color_list = ', '.join([f"{c['hex']} (S:{c['saturation']:.0f}%, L:{c['lightness']:.0f}%)" 
+                                for c in neon_colors])
+        issues.append(
+            f"🌈 **Cores muito saturadas detectadas:** {color_list}. "
+            f"Recomendação: Cores neon podem causar fadiga visual. "
+            f"Prefira tons mais suaves (saturação <80%) para fundos e textos longos."
+        )
+    
+    return {'issues': issues}
+
+
+def normalize_app_inventor_color(color_value):
+    """
+    Converte cores do App Inventor para RGB
+    App Inventor usa formato &HFF000000 ou &H00000000
+    """
+    if not color_value or not isinstance(color_value, str):
+        return None
+    
+    color_value = color_value.strip()
+    
+    try:
+        # Formato App Inventor: &HFF000000 (AARRGGBB)
+        if color_value.startswith('&H'):
+            hex_value = color_value[2:]  # Remove &H
+            if len(hex_value) == 8:
+                # AARRGGBB - ignorar canal alpha
+                r = int(hex_value[2:4], 16)
+                g = int(hex_value[4:6], 16)
+                b = int(hex_value[6:8], 16)
+                return (r, g, b)
+            elif len(hex_value) == 6:
+                # RRGGBB
+                r = int(hex_value[0:2], 16)
+                g = int(hex_value[2:4], 16)
+                b = int(hex_value[4:6], 16)
+                return (r, g, b)
+        
+        # Formato hexadecimal padrão: #RRGGBB
+        elif color_value.startswith('#'):
+            hex_value = color_value[1:]
+            if len(hex_value) == 6:
+                r = int(hex_value[0:2], 16)
+                g = int(hex_value[2:4], 16)
+                b = int(hex_value[4:6], 16)
+                return (r, g, b)
+        
+        # Tentar interpretar como número decimal
+        elif color_value.isdigit():
+            color_int = int(color_value)
+            # Converter para RGB (assumir formato ARGB)
+            r = (color_int >> 16) & 0xFF
+            g = (color_int >> 8) & 0xFF
+            b = color_int & 0xFF
+            return (r, g, b)
+            
+    except ValueError:
+        pass
+    
+    return None
