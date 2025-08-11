@@ -314,6 +314,9 @@ def analyze_aia_file(aia_file):
         # Clear existing images for this file
         aia_file.images.all().delete()
         
+        # Analyze layout and spacing from .scm files
+        layout_analysis = analyze_layout_and_spacing(temp_dir)
+        
         # Walk through extracted files
         for root, dirs, files in os.walk(temp_dir):
             for file in files:
@@ -348,8 +351,8 @@ def analyze_aia_file(aia_file):
         aia_file.analysis_completed_at = timezone.now()
         aia_file.save()
         
-        # Generate usability evaluation
-        generate_usability_evaluation(aia_file)
+        # Generate usability evaluation with layout analysis
+        generate_usability_evaluation(aia_file, layout_analysis)
 
 
 def process_image_file(file_path, filename, aia_file, relative_path):
@@ -574,13 +577,20 @@ def is_icon(filename, image_asset):
            (image_asset.width <= 128 and image_asset.height <= 128)
 
 
-def generate_usability_evaluation(aia_file):
+def generate_usability_evaluation(aia_file, layout_analysis=None):
     """Generate comprehensive usability evaluation for the app using new granular scoring"""
     
     images = aia_file.images.all()
     
     if not images.exists():
         # Se não há imagens, cria avaliação com scores máximos
+        recommendations = ['• ✨ Projeto sem assets visuais - nenhum problema detectado.']
+        
+        # Adicionar recomendações de layout se disponível
+        if layout_analysis:
+            layout_recommendations = generate_layout_recommendations(layout_analysis)
+            recommendations.extend(layout_recommendations)
+        
         evaluation, created = UsabilityEvaluation.objects.get_or_create(
             aia_file=aia_file,
             defaults={
@@ -591,7 +601,7 @@ def generate_usability_evaluation(aia_file):
                 'low_quality_images_count': 0,
                 'oversized_images_count': 0,
                 'undersized_images_count': 0,
-                'recommendations': '• ✨ Projeto sem assets visuais - nenhum problema detectado.',
+                'recommendations': '\n'.join(recommendations),
             }
         )
         return
@@ -608,6 +618,12 @@ def generate_usability_evaluation(aia_file):
     
     # Generate recommendations
     recommendations = generate_recommendations(aia_file, images)
+    
+    # Adicionar recomendações de layout se disponível
+    if layout_analysis:
+        layout_recommendations = generate_layout_recommendations(layout_analysis)
+        if layout_recommendations:
+            recommendations += '\n\n🏗️ **Análise de Layout e Interface:**\n' + '\n'.join(layout_recommendations)
     
     # Create or update evaluation
     evaluation, created = UsabilityEvaluation.objects.get_or_create(
@@ -776,3 +792,306 @@ def generate_recommendations(aia_file, images):
         recommendations.append("✨ **Perfeito!** Nenhum problema detectado nos assets visuais.")
     
     return '\n'.join(recommendations)
+
+
+def analyze_layout_and_spacing(temp_dir):
+    """
+    Analisa layout e espaçamento de todos os screens do App Inventor
+    baseado nos trabalhos de Nascimento & Brehm (2022)
+    """
+    layout_issues = []
+    screens_analyzed = 0
+    
+    # Encontrar todos os arquivos .scm
+    for root, dirs, files in os.walk(temp_dir):
+        for file in files:
+            if file.endswith('.scm'):
+                file_path = os.path.join(root, file)
+                screen_name = os.path.splitext(file)[0]
+                
+                try:
+                    screen_data = parse_scm_file(file_path)
+                    if screen_data:
+                        screens_analyzed += 1
+                        
+                        # Verificar margens da tela
+                        if not check_screen_margins(screen_data):
+                            layout_issues.append(f"Screen {screen_name}: Falta de margens adequadas nas laterais")
+                        
+                        # Verificar espaçamento entre componentes
+                        if not check_element_spacing(screen_data):
+                            layout_issues.append(f"Screen {screen_name}: Espaçamento inadequado entre elementos")
+                            
+                except Exception as e:
+                    print(f"Erro ao analisar {file}: {str(e)}")
+                    continue
+    
+    return {
+        'screens_analyzed': screens_analyzed,
+        'layout_issues': layout_issues,
+        'has_margin_issues': any('margens' in issue for issue in layout_issues),
+        'has_spacing_issues': any('espaçamento' in issue for issue in layout_issues)
+    }
+
+
+def parse_scm_file(file_path):
+    """
+    Extrai e parseia o conteúdo JSON de um arquivo .scm do App Inventor
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Os arquivos .scm contêm JSON entre markers específicos
+        json_start = content.find('{')
+        json_end = content.rfind('}') + 1
+        
+        if json_start == -1 or json_end == 0:
+            return None
+            
+        json_content = content[json_start:json_end]
+        return json.loads(json_content)
+        
+    except Exception as e:
+        print(f"Erro ao parsear arquivo SCM {file_path}: {str(e)}")
+        return None
+
+
+def check_screen_margins(screen_data):
+    """
+    Tarefa 1.1: Verificar se os componentes principais na tela possuem 
+    uma margem de respiro nas laterais
+    
+    Verifica se existe um padrão de margem adequado na tela
+    """
+    try:
+        properties = screen_data.get('Properties', {})
+        components = properties.get('$Components', [])
+        
+        if not components:
+            return True  # Tela vazia, não há problema de margem
+        
+        # Procurar por HorizontalArrangements que funcionem como container principal
+        main_containers = []
+        for component in components:
+            if component.get('$Type') == 'HorizontalArrangement':
+                # Verificar se tem largura "Fill Parent" ou similar
+                width = component.get('Width', '')
+                if (width == 'Fill parent' or width == '-2' or 
+                    width == 'Automatic' or width == '' or
+                    (isinstance(width, str) and '%' in width and int(width.replace('%', '')) > 80)):
+                    main_containers.append(component)
+        
+        # Se temos containers principais, verificar se eles têm estrutura de margem
+        if main_containers:
+            for container in main_containers:
+                if has_margin_structure(container):
+                    return True
+        
+        # Verificar se os componentes principais estão muito próximos das bordas
+        # Se não há estrutura de margem explícita, verificar larguras dos componentes
+        total_components = count_interactive_components(components)
+        if total_components <= 1:
+            return True  # Com poucos componentes, margem é menos crítica
+        
+        # Se há muitos componentes sem estrutura de margem, é um problema
+        return False
+        
+    except Exception as e:
+        print(f"Erro ao verificar margens: {str(e)}")
+        return True  # Em caso de erro, não penalizar
+
+
+def has_margin_structure(container):
+    """
+    Verifica se um container tem estrutura típica de margem
+    """
+    sub_components = container.get('$Components', [])
+    
+    if len(sub_components) == 0:
+        return False
+    
+    # Padrão 1: Labels vazios nas laterais funcionando como espaçadores
+    if len(sub_components) >= 3:
+        first = sub_components[0]
+        last = sub_components[-1]
+        
+        # Verificar se primeiro e último são Labels vazios
+        if (first.get('$Type') == 'Label' and last.get('$Type') == 'Label' and
+            (first.get('Text', '').strip() == '' or first.get('Text', '').strip() == ' ') and
+            (last.get('Text', '').strip() == '' or last.get('Text', '').strip() == ' ')):
+            return True
+    
+    # Padrão 2: Componente central com largura controlada
+    if len(sub_components) == 1:
+        central_component = sub_components[0]
+        width = central_component.get('Width', '')
+        
+        # Se o componente central tem largura específica (não Fill Parent), pode indicar margem
+        if (isinstance(width, str) and width.isdigit() and int(width) < 300) or \
+           (isinstance(width, str) and '%' in width and int(width.replace('%', '')) < 90):
+            return True
+    
+    return False
+
+
+def check_element_spacing(screen_data):
+    """
+    Tarefa 1.2: Verificar se existe um espaçamento vertical mínimo 
+    entre os componentes interativos
+    
+    Procura por Labels vazios ou HorizontalArrangements com altura específica 
+    que funcionem como espaçadores
+    """
+    try:
+        properties = screen_data.get('Properties', {})
+        components = properties.get('$Components', [])
+        
+        if len(components) <= 1:
+            return True  # Com poucos componentes, espaçamento não é crítico
+        
+        interactive_components = []
+        spacer_components = []
+        
+        # Classificar componentes em interativos e espaçadores
+        for i, component in enumerate(components):
+            component_type = component.get('$Type', '')
+            
+            # Componentes interativos
+            if component_type in ['Button', 'TextBox', 'Slider', 'CheckBox', 
+                                'Switch', 'ListView', 'Image', 'ImageSprite']:
+                interactive_components.append((i, component))
+            
+            # Possíveis espaçadores
+            elif component_type == 'Label':
+                text = component.get('Text', '').strip()
+                height = component.get('Height', '')
+                
+                if (text == '' or text == ' ') and height:
+                    # Label vazio com altura definida = espaçador
+                    spacer_components.append((i, component))
+                    
+            elif component_type == 'HorizontalArrangement':
+                height = component.get('Height', '')
+                sub_components = component.get('$Components', [])
+                
+                # HorizontalArrangement vazio com altura = espaçador
+                if len(sub_components) == 0 and height and is_spacer_height(height):
+                    spacer_components.append((i, component))
+        
+        if len(interactive_components) <= 1:
+            return True  # Não precisa de espaçamento com 1 componente ou menos
+        
+        # Verificar se há espaçadores entre componentes interativos
+        spacing_found = 0
+        for i in range(len(interactive_components) - 1):
+            current_pos = interactive_components[i][0]
+            next_pos = interactive_components[i + 1][0]
+            
+            # Verificar se há espaçador entre os dois componentes interativos
+            for spacer_pos, spacer in spacer_components:
+                if current_pos < spacer_pos < next_pos:
+                    spacing_found += 1
+                    break
+        
+        # Se encontramos espaçadores para pelo menos 50% dos gaps, consideramos adequado
+        required_spacers = len(interactive_components) - 1
+        return spacing_found >= (required_spacers * 0.5)
+        
+    except Exception as e:
+        print(f"Erro ao verificar espaçamento: {str(e)}")
+        return True  # Em caso de erro, não penalizar
+
+
+def count_interactive_components(components):
+    """
+    Conta o número de componentes interativos em uma lista de componentes
+    """
+    interactive_types = ['Button', 'TextBox', 'Slider', 'CheckBox', 
+                        'Switch', 'ListView', 'Image', 'ImageSprite']
+    count = 0
+    
+    for component in components:
+        if component.get('$Type', '') in interactive_types:
+            count += 1
+        
+        # Recursivamente contar em sub-componentes
+        sub_components = component.get('$Components', [])
+        if sub_components:
+            count += count_interactive_components(sub_components)
+    
+    return count
+
+
+def is_spacer_height(height):
+    """
+    Determina se uma altura específica indica um espaçador
+    """
+    if isinstance(height, str):
+        # Alturas pequenas em pixels (5-50px são típicas para espaçamento)
+        if height.isdigit():
+            return 5 <= int(height) <= 50
+        
+        # Percentuais pequenos
+        if '%' in height:
+            try:
+                percentage = int(height.replace('%', ''))
+                return 1 <= percentage <= 10
+            except:
+                return False
+    
+    return False
+
+
+def generate_layout_recommendations(layout_analysis):
+    """
+    Gera recomendações específicas baseadas na análise de layout
+    """
+    recommendations = []
+    
+    if not layout_analysis:
+        return recommendations
+    
+    screens_analyzed = layout_analysis.get('screens_analyzed', 0)
+    layout_issues = layout_analysis.get('layout_issues', [])
+    has_margin_issues = layout_analysis.get('has_margin_issues', False)
+    has_spacing_issues = layout_analysis.get('has_spacing_issues', False)
+    
+    if screens_analyzed == 0:
+        recommendations.append("⚠️ **Não foi possível analisar as telas do projeto.** Verifique se o arquivo .aia está íntegro.")
+        return recommendations
+    
+    # Relatório geral
+    recommendations.append(f"📊 **{screens_analyzed} tela(s) analisada(s) para padrões de layout**")
+    
+    # Recomendações específicas por tipo de problema
+    if has_margin_issues:
+        recommendations.append(
+            "📐 **Problema de Margens:** Algumas telas não possuem margens adequadas nas laterais. "
+            "Recomendação: Use HorizontalArrangement com Labels vazios nas laterais para criar "
+            "respiro visual, ou configure componentes com largura específica (ex: 80%) em vez de 'Fill Parent'."
+        )
+    
+    if has_spacing_issues:
+        recommendations.append(
+            "📏 **Problema de Espaçamento:** Componentes muito próximos entre si detectados. "
+            "Recomendação: Adicione Labels vazios com altura de 8-16 pixels entre botões, caixas de texto "
+            "e outros elementos interativos para melhorar a legibilidade."
+        )
+    
+    # Recomendações específicas por tela
+    if layout_issues:
+        recommendations.append("🔍 **Detalhes por tela:**")
+        for issue in layout_issues:
+            recommendations.append(f"  • {issue}")
+    
+    # Dicas proativas
+    if not has_margin_issues and not has_spacing_issues:
+        recommendations.append("✅ **Excelente!** Layout bem estruturado com margens e espaçamento adequados.")
+    else:
+        recommendations.append(
+            "💡 **Dica:** Interfaces bem espaçadas seguem a regra dos múltiplos de 8px. "
+            "Use 8px, 16px, 24px para espaçamentos e 16dp-24dp para margens laterais."
+        )
+    
+    return recommendations
