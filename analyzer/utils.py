@@ -632,7 +632,7 @@ def generate_usability_evaluation(aia_file, layout_analysis=None, icon_analysis=
         return
     
     # Calcula scores usando a nova lógica granular
-    scores = calculate_overall_scores(list(images))
+    scores = calculate_overall_scores(images)
     
     # Aplicar penalização por inconsistência de ícones
     if icon_analysis and icon_analysis.get('has_style_inconsistency', False):
@@ -649,7 +649,7 @@ def generate_usability_evaluation(aia_file, layout_analysis=None, icon_analysis=
     undersized_count = images.filter(width__lt=100, height__lt=100).count()
     
     # Generate comprehensive usability report
-    recommendations = generate_comprehensive_usability_report(aia_file, list(images), scores, layout_analysis, icon_analysis)
+    recommendations = generate_comprehensive_usability_report(aia_file, images, scores, layout_analysis, icon_analysis)
     
     # Adicionar recomendações de layout se disponível
     if layout_analysis:
@@ -701,7 +701,7 @@ def generate_comprehensive_usability_report(aia_file, images, scores, layout_ana
 📊 **RELATÓRIO DE ANÁLISE DE USABILIDADE**
 Arquivo: {aia_file.name}
 Data da Análise: {timezone.now().strftime('%d/%m/%Y às %H:%M')}
-Total de Assets Analisados: {images.count()}
+Total de Assets Analisados: {images.count() if hasattr(images, 'count') else len(images)}
 
 ═══════════════════════════════════════════════════════════════
 """)
@@ -765,7 +765,7 @@ Total de Assets Analisados: {images.count()}
 ═══════════════════════════════════════════════════════════════
 
 ✅ **RESUMO EXECUTIVO:**
-Este relatório avaliou {images.count()} asset(s) usando critérios acadêmicos baseados em:
+Este relatório avaliou {images.count() if hasattr(images, 'count') else len(images)} asset(s) usando critérios acadêmicos baseados em:
 • Resolução e otimização de arquivos (40% da nota)
 • Proporções adequadas para dispositivos móveis (30% da nota)  
 • Consistência visual e padrões de design (30% da nota)
