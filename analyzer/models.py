@@ -72,6 +72,10 @@ class ImageAsset(models.Model):
     aspect_ratio_appropriate = models.BooleanField(null=True, blank=True)
     file_size_optimized = models.BooleanField(null=True, blank=True)
     
+    # Material Design Icon analysis
+    material_icon_style = models.CharField(max_length=20, null=True, blank=True)  # filled, outlined, round, sharp, twotone
+    is_material_icon = models.BooleanField(default=False)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

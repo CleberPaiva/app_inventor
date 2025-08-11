@@ -359,8 +359,11 @@ def analyze_aia_file(aia_file):
         aia_file.analysis_completed_at = timezone.now()
         aia_file.save()
         
-        # Generate usability evaluation with layout analysis
-        generate_usability_evaluation(aia_file, layout_analysis)
+        # Tarefa 4.1: Analisar consistência de estilo dos ícones Material Design
+        icon_analysis = analyze_icon_style_consistency(aia_file)
+        
+        # Generate usability evaluation with layout analysis and icon analysis
+        generate_usability_evaluation(aia_file, layout_analysis, icon_analysis)
 
 
 def process_image_file(file_path, filename, aia_file, relative_path):
@@ -398,6 +401,15 @@ def process_image_file(file_path, filename, aia_file, relative_path):
             
             # Determine asset type
             image_asset.asset_type = determine_asset_type(filename, width, height)
+            
+            # Tarefa 4.1: Verificar se é um ícone Material Design e identificar estilo
+            if image_asset.asset_type == 'icon':
+                material_style = identify_material_icon(image_asset)
+                if material_style:
+                    image_asset.is_material_icon = True
+                    image_asset.material_icon_style = material_style
+                else:
+                    image_asset.is_material_icon = False
             
             image_asset.save()
             return image_asset
@@ -585,7 +597,7 @@ def is_icon(filename, image_asset):
            (image_asset.width <= 128 and image_asset.height <= 128)
 
 
-def generate_usability_evaluation(aia_file, layout_analysis=None):
+def generate_usability_evaluation(aia_file, layout_analysis=None, icon_analysis=None):
     """Generate comprehensive usability evaluation for the app using new granular scoring"""
     
     images = aia_file.images.all()
@@ -598,6 +610,11 @@ def generate_usability_evaluation(aia_file, layout_analysis=None):
         if layout_analysis:
             layout_recommendations = generate_layout_recommendations(layout_analysis)
             recommendations.extend(layout_recommendations)
+        
+        # Adicionar recomendações de ícones se disponível
+        if icon_analysis and icon_analysis.get('issues'):
+            recommendations.append('\n🎨 **Análise de Ícones Material Design:**')
+            recommendations.extend(icon_analysis['issues'])
         
         evaluation, created = UsabilityEvaluation.objects.get_or_create(
             aia_file=aia_file,
@@ -617,6 +634,13 @@ def generate_usability_evaluation(aia_file, layout_analysis=None):
     # Calcula scores usando a nova lógica granular
     scores = calculate_overall_scores(list(images))
     
+    # Aplicar penalização por inconsistência de ícones
+    if icon_analysis and icon_analysis.get('has_style_inconsistency', False):
+        # Reduzir pontuação de ícones em 20 pontos por inconsistência
+        scores['icon_quality_score'] = max(0, scores['icon_quality_score'] - 20)
+        # Reduzir pontuação geral proportionalmente
+        scores['overall_score'] = (scores['image_quality_score'] + scores['icon_quality_score']) / 2
+    
     # Calculate detailed metrics
     total_images = images.count()
     high_quality_count = images.filter(quality_rating__in=['high', 'excellent']).count()
@@ -632,6 +656,10 @@ def generate_usability_evaluation(aia_file, layout_analysis=None):
         layout_recommendations = generate_layout_recommendations(layout_analysis)
         if layout_recommendations:
             recommendations += '\n\n🏗️ **Análise de Layout e Interface:**\n' + '\n'.join(layout_recommendations)
+    
+    # Adicionar recomendações de ícones se disponível
+    if icon_analysis and icon_analysis.get('issues'):
+        recommendations += '\n\n🎨 **Análise de Consistência de Ícones:**\n' + '\n'.join(icon_analysis['issues'])
     
     # Create or update evaluation
     evaluation, created = UsabilityEvaluation.objects.get_or_create(
@@ -1550,3 +1578,171 @@ def normalize_app_inventor_color(color_value):
         pass
     
     return None
+
+
+def identify_material_icon(image_asset):
+    """
+    Tarefa 4.1: Identificar se uma imagem é um ícone Material Design e qual estilo
+    Retorna o estilo do ícone (filled, outlined, round, sharp, twotone) ou None
+    """
+    try:
+        # Carrega a imagem para análise
+        with Image.open(image_asset.extracted_file.path) as img:
+            # Convert to RGB if necessary
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Calcular hash da imagem para comparação
+            img_hash = calculate_image_hash(img)
+            
+            # Verificar se é um ícone Material Design comparando com a base de dados
+            for category_name, icons in MATERIAL_ICONS_DB.items():
+                for icon_name, styles in icons.items():
+                    for style_name, icon_data in styles.items():
+                        # Comparar hash ou similaridade visual
+                        if is_similar_to_material_icon(img, icon_data, img_hash):
+                            return style_name
+            
+            return None
+            
+    except Exception as e:
+        print(f"Erro ao identificar ícone Material Design para {image_asset.name}: {str(e)}")
+        return None
+
+
+def calculate_image_hash(img):
+    """
+    Calcula um hash simples da imagem para comparação
+    """
+    try:
+        # Redimensiona para 8x8 para comparação rápida
+        img_small = img.resize((8, 8), Image.Resampling.LANCZOS)
+        
+        # Converte para escala de cinza
+        img_gray = img_small.convert('L')
+        
+        # Calcula a média dos pixels
+        pixels = list(img_gray.getdata())
+        avg = sum(pixels) / len(pixels)
+        
+        # Cria hash binário baseado na média
+        hash_bits = []
+        for pixel in pixels:
+            hash_bits.append('1' if pixel > avg else '0')
+        
+        return ''.join(hash_bits)
+    except:
+        return None
+
+
+def is_similar_to_material_icon(img, icon_data, img_hash):
+    """
+    Verifica se uma imagem é similar a um ícone Material Design
+    Por simplicidade, vamos usar o nome do arquivo e características básicas
+    """
+    try:
+        # Por enquanto, implementação simplificada baseada em nome e tamanho
+        # Em uma implementação completa, seria necessário análise de SVG e comparação visual
+        
+        # Verifica se o tamanho está dentro dos padrões de ícones Material Design
+        img_size = img.size
+        standard_sizes = [16, 18, 20, 24, 32, 36, 40, 48, 56, 64, 72, 96, 128, 144, 192, 256, 512]
+        
+        # Se ambas as dimensões são iguais (quadrado) e correspondem a tamanhos padrão
+        if img_size[0] == img_size[1] and img_size[0] in standard_sizes:
+            # Análise adicional pode ser implementada aqui
+            # Por exemplo, análise de cor dominante, presença de transparência, etc.
+            return True
+            
+        return False
+    except:
+        return False
+
+
+def analyze_icon_style_consistency(aia_file):
+    """
+    Tarefa 4.1: Analisar consistência de estilo dos ícones Material Design
+    Retorna análise de consistência e recomendações
+    """
+    try:
+        # Buscar todas as imagens do arquivo AIA que são ícones Material Design
+        material_icons = aia_file.images.filter(
+            is_material_icon=True,
+            material_icon_style__isnull=False
+        )
+        
+        if not material_icons.exists():
+            return {
+                'issues': [],
+                'has_style_inconsistency': False,
+                'stats': {
+                    'total_material_icons': 0,
+                    'styles_used': [],
+                    'styles_count': 0,
+                    'icon_details': []
+                }
+            }
+        
+        # Coletar todos os estilos encontrados
+        styles_used = set()
+        icon_details = []
+        
+        for icon in material_icons:
+            style = icon.material_icon_style
+            if style:
+                styles_used.add(style)
+                icon_details.append({
+                    'name': icon.name,
+                    'style': style,
+                    'asset_type': icon.asset_type
+                })
+        
+        # Filtrar None values
+        styles_used = {style for style in styles_used if style is not None}
+        
+        # Verificar consistência
+        has_inconsistency = len(styles_used) > 1
+        issues = []
+        
+        if has_inconsistency:
+            styles_list = ', '.join(sorted(styles_used))
+            issues.append(
+                f"🎨 **Estilos de ícones mistos detectados:** {styles_list}. "
+                f"Para manter a consistência visual, escolha e utilize apenas um estilo "
+                f"em todo o aplicativo. Recomendação: Use 'filled' para interfaces mais "
+                f"tradicionais ou 'outlined' para designs mais modernos e limpos."
+            )
+            
+            # Detalhes por estilo
+            for style in sorted(styles_used):
+                icons_of_style = [icon for icon in icon_details if icon['style'] == style]
+                icon_names = [icon['name'] for icon in icons_of_style]
+                issues.append(
+                    f"  • **Estilo '{style}':** {len(icons_of_style)} ícone(s) - "
+                    f"{', '.join(icon_names[:3])}"
+                    f"{'...' if len(icon_names) > 3 else ''}"
+                )
+        
+        return {
+            'issues': issues,
+            'has_style_inconsistency': has_inconsistency,
+            'stats': {
+                'total_material_icons': len(icon_details),
+                'styles_used': list(styles_used),
+                'styles_count': len(styles_used),
+                'icon_details': icon_details
+            }
+        }
+        
+    except Exception as e:
+        print(f"Erro ao analisar consistência de estilo dos ícones: {str(e)}")
+        return {
+            'issues': [f'Erro na análise de consistência de ícones: {str(e)}'],
+            'has_style_inconsistency': False,
+            'stats': {
+                'total_material_icons': 0,
+                'styles_used': [],
+                'styles_count': 0,
+                'icon_details': []
+            }
+        }
