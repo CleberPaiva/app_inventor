@@ -1,0 +1,9 @@
+# Dependências adicionais para integração com Gemini AI
+google-generativeai>=0.3.0  # Google Gemini AI API
+python-dotenv>=1.0.0       # Para gerenciar variáveis de ambiente
+requests>=2.31.0            # Para requisições HTTP (já incluído no Django)
+Pillow>=9.0.0              # Para processamento de imagens (já incluído)
+
+# Dependências opcionais para análise avançada
+wcag-contrast-ratio>=0.9.0  # Análise de contraste WCAG
+colour-science>=0.4.0       # Análise avançada de cores

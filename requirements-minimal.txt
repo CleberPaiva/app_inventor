@@ -1,0 +1,22 @@
+# Minimal Requirements for MIT App Inventor Usability Analyzer
+# Use this for basic installation without AI features
+
+# Core Framework
+Django>=5.2.0
+Pillow>=10.0.0
+
+# Image and Color Analysis
+numpy>=1.24.0
+colour-science>=0.4.0
+wcag-contrast-ratio>=0.9
+
+# Basic Utilities
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Archive Processing
+zipfile-deflate64>=0.2.0
+
+# Optional: Google Gemini AI (Recommended)
+# Uncomment the line below to enable AI features
+# google-generativeai>=0.8.0

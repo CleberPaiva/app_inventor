@@ -12,6 +12,23 @@ from pathlib import Path
 import hashlib
 import json
 import re
+
+# Importar sistema de IA para feedback inteligente
+try:
+    from .ai_feedback import generate_ai_enhanced_feedback, enhance_existing_recommendations
+    AI_FEEDBACK_AVAILABLE = True
+except ImportError:
+    AI_FEEDBACK_AVAILABLE = False
+    print("⚠️ Sistema de IA não disponível. Usando feedback básico.")
+
+# Importar Gemini AI para análise avançada
+try:
+    from .gemini_ai import analyze_with_gemini_ai, GeminiAnalyzer
+    GEMINI_AI_AVAILABLE = True
+except ImportError:
+    GEMINI_AI_AVAILABLE = False
+    print("⚠️ Gemini AI não disponível. Instale: pip install google-generativeai")
+
 try:
     import wcag_contrast_ratio
     import colour
@@ -661,6 +678,11 @@ def generate_usability_evaluation(aia_file, layout_analysis=None, icon_analysis=
     if icon_analysis and icon_analysis.get('issues'):
         recommendations += '\n\n🎨 **Análise de Consistência de Ícones:**\n' + '\n'.join(icon_analysis['issues'])
     
+    # === ADICIONAR ANÁLISE DA IA ===
+    enhanced_recs = generate_detailed_recommendations(aia_file, images, scores)
+    if enhanced_recs and enhanced_recs != '\n'.join([]):
+        recommendations = enhanced_recs
+    
     # Create or update evaluation
     evaluation, created = UsabilityEvaluation.objects.get_or_create(
         aia_file=aia_file,
@@ -752,7 +774,18 @@ Total de Assets Analisados: {images.count() if hasattr(images, 'count') else len
         report_sections.append(generate_academic_analysis_report(layout_analysis))
     
     # === RECOMENDAÇÕES ESPECÍFICAS ===
-    recommendations = generate_detailed_recommendations(aia_file, images, scores)
+    # Gerar recomendações inteligentes com IA
+    if AI_FEEDBACK_AVAILABLE:
+        # Usar sistema de IA para feedback contextual e personalizado
+        try:
+            project_name = aia_file.name if hasattr(aia_file, 'name') else ""
+            recommendations = generate_ai_enhanced_feedback(aia_file, images, scores, project_name)
+        except Exception as e:
+            print(f"⚠️ Erro no sistema de IA: {e}. Usando feedback básico.")
+            recommendations = generate_detailed_recommendations(aia_file, images, scores)
+    else:
+        # Usar sistema básico de recomendações
+        recommendations = generate_detailed_recommendations(aia_file, images, scores)
     if recommendations:
         report_sections.append(f"""
 💡 **RECOMENDAÇÕES PARA MELHORIA:**
@@ -1027,6 +1060,84 @@ def generate_detailed_recommendations(aia_file, images, scores):
     
     if not recommendations:
         recommendations.append("✨ **Perfeito!** Nenhum problema detectado nos assets visuais.")
+    
+    # Tentar primeiro análise com Gemini AI (mais avançada)
+    if GEMINI_AI_AVAILABLE:
+        try:
+            project_name = aia_file.name if hasattr(aia_file, 'name') else ""
+            gemini_result = analyze_with_gemini_ai(aia_file, images, scores, project_name)
+            
+            if gemini_result.get('ai_powered', False):
+                # COMBINAR recomendações tradicionais COM análise da IA
+                enhanced_recs = []
+                
+                # === SEÇÃO DA IA (INÍCIO) ===
+                enhanced_recs.append("═══════════════════════════════════════════════════════════════")
+                enhanced_recs.append("")
+                enhanced_recs.append("🤖 **ANÁLISE INTELIGENTE COM GEMINI AI**")
+                enhanced_recs.append("")
+                
+                # Contexto detectado
+                context = gemini_result.get('context', {})
+                enhanced_recs.append(
+                    f"🎯 **Contexto Detectado:** App {context.get('category', 'genérico')} "
+                    f"para público {context.get('target_audience', 'geral')} "
+                    f"(confiança: {context.get('confidence_score', 0)*100:.0f}%)"
+                )
+                enhanced_recs.append(f"💭 **Justificativa:** {context.get('reasoning', 'Análise automática')}")
+                enhanced_recs.append("")
+                
+                # Recomendações inteligentes
+                ai_recommendations = gemini_result.get('recommendations', [])
+                if ai_recommendations:
+                    enhanced_recs.append("🚀 **RECOMENDAÇÕES INTELIGENTES:**")
+                    enhanced_recs.extend([f"   • {rec}" for rec in ai_recommendations])
+                    enhanced_recs.append("")
+                
+                # Matriz de prioridades
+                priority = gemini_result.get('priority_matrix', {})
+                if priority.get('critical'):
+                    enhanced_recs.append("🔴 **CRÍTICAS (corrigir primeiro):**")
+                    enhanced_recs.extend([f"   • {item}" for item in priority['critical']])
+                    enhanced_recs.append("")
+                
+                if priority.get('high'):
+                    enhanced_recs.append("🟡 **ALTA PRIORIDADE:**")
+                    enhanced_recs.extend([f"   • {item}" for item in priority['high']])
+                    enhanced_recs.append("")
+                
+                # Análise de acessibilidade específica
+                accessibility = gemini_result.get('accessibility', {})
+                if accessibility.get('critical_fixes'):
+                    enhanced_recs.append("♿ **ACESSIBILIDADE CRÍTICA:**")
+                    enhanced_recs.extend([f"   • {fix}" for fix in accessibility['critical_fixes']])
+                    enhanced_recs.append("")
+                
+                enhanced_recs.append(f"📊 **Score Atual:** {scores['overall_score']:.1f}/100")
+                enhanced_recs.append("")
+                enhanced_recs.append("═══════════════════════════════════════════════════════════════")
+                enhanced_recs.append("")
+                
+                # === ADICIONAR RECOMENDAÇÕES TRADICIONAIS ===
+                enhanced_recs.append("💡 **RECOMENDAÇÕES TÉCNICAS DETALHADAS:**")
+                enhanced_recs.append("")
+                enhanced_recs.extend(recommendations)
+                
+                return '\n'.join(enhanced_recs)
+                
+        except Exception as e:
+            print(f"⚠️ Erro na análise Gemini AI: {e}")
+    
+    # Fallback para IA básica se Gemini não funcionar
+    if AI_FEEDBACK_AVAILABLE:
+        try:
+            project_name = aia_file.name if hasattr(aia_file, 'name') else ""
+            enhanced_recommendations = enhance_existing_recommendations(
+                recommendations, aia_file, images, scores
+            )
+            return '\n'.join(enhanced_recommendations)
+        except Exception as e:
+            print(f"⚠️ Erro ao aprimorar recomendações com IA: {e}")
     
     return '\n'.join(recommendations)
 

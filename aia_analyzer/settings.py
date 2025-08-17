@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -130,3 +131,14 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Google Gemini AI Configuration
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY', None)
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', None)
+GEMINI_MAX_IMAGES_PER_ANALYSIS = int(os.getenv('GEMINI_MAX_IMAGES_PER_ANALYSIS', 5))
+GEMINI_FALLBACK_TO_BASIC = os.getenv('GEMINI_FALLBACK_TO_BASIC', 'True').lower() == 'true'
+GEMINI_CACHE_RESULTS = os.getenv('GEMINI_CACHE_RESULTS', 'True').lower() == 'true'
+
+# AI Analysis Configuration
+AI_ANALYSIS_ENABLED = True  # Habilita sistema de IA local
+GEMINI_ANALYSIS_ENABLED = (GOOGLE_API_KEY or GEMINI_API_KEY) is not None  # Habilita Gemini se API key estiver configurada
